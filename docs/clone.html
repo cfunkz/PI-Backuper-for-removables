@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clone | PI-Backuper</title>
+<meta name="description" content="Copy one card straight onto another, without saving a file in between.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.1.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html" class="active">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Clone</h1>
+<p class="lead">Copy one card straight onto another, without saving a file in between.</p>
+<div class="warn"><p>Clone erases everything on disk B.</p></div>
+
+<h2 id="steps">Steps</h2>
+<ol>
+  <li>Plug in both cards. You'll need two readers, or a reader with two slots that shows up as two disks.</li>
+  <li>Press <strong>Refresh</strong>.</li>
+  <li>Set <strong>A</strong> to the card you're copying from and <strong>B</strong> to the card you're copying onto.</li>
+  <li>Click <strong>Start clone</strong> and check the dialog. It lists both disks, with B marked as the one being erased.</li>
+</ol>
+<p>Progress shows <strong>Cloning</strong> and then, if verify is on, <strong>Verifying</strong>.</p>
+
+<h2 id="rules">Rules</h2>
+<ul>
+  <li>A and B must be different disks.</li>
+  <li>B must be at least as big as A, down to the byte. Same-label cards from different brands often differ by a few megabytes, so if the clone refuses, use a bigger card, or back up A and restore it instead (that only needs room for the used part of the image).</li>
+  <li>Both disks are looked up again after you confirm, so swapping a card while the dialog was open gets caught.</li>
+</ul>
+
+<h2 id="how-it-works">How it works</h2>
+<p>It's the same as a restore, just reading from a disk instead of a file. A's volumes get a best-effort lock (you'll get a note if one couldn't be locked, and should leave that drive alone until it's done). B's volumes must be locked and dismounted or the clone won't start. B's first 4 MiB is blanked first and written last, so a clone that stops partway leaves B blank. With verify on, all of B is read back and its SHA-256 compared with what was read from A.</p>
+<p>The <a href="gzip.html">compress</a> option has no effect on clones, and no <code>.hash.txt</code> is written since there's no file.</p>
+
+</article>
+<div class="pager"><a href="restore.html">&larr; Restore</a><a href="verification.html">Verification and hashes &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

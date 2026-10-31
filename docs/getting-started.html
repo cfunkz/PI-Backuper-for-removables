@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started | PI-Backuper</title>
+<meta name="description" content="What you need, how to run it, and a quick tour of the window.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.1.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html" class="active">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Getting started</h1>
+<p class="lead">What you need, how to run it, and a quick tour of the window.</p>
+<h2 id="what-you-need">What you need</h2>
+<ul>
+  <li>Windows 10 or 11</li>
+  <li>An administrator account (raw disk access needs it)</li>
+  <li>A USB SD card reader, or the built-in one if Windows lists it as removable</li>
+  <li>Free disk space for your backups. A compressed backup of a mostly empty card is small, but plan for up to the full card size.</li>
+</ul>
+
+<h2 id="download-and-run">Download and run</h2>
+<ol>
+  <li>Grab <code>PI-Backuper.exe</code> from the <a href="https://github.com/cfunkz/PI-Backuper/releases">Releases page</a>.</li>
+  <li>Double-click it. Windows will show a UAC prompt; say yes. The exe asks for admin rights by itself.</li>
+  <li>Put your SD card in the reader and press <strong>Refresh</strong> if it doesn't show up straight away.</li>
+</ol>
+<p>Windows SmartScreen may warn about an unknown publisher because the exe isn't code-signed. Click <em>More info</em> and then <em>Run anyway</em>, or <a href="building.html">build it yourself</a> from source if you'd rather.</p>
+<p>If you run it without admin rights you'll get "Please run PI-Backuper as Administrator" and the app closes. Right-click the exe and pick <em>Run as administrator</em>.</p>
+
+<h2 id="the-window">The window</h2>
+<table>
+  <tr><th>Section</th><th>What it's for</th></tr>
+  <tr><td>Device</td><td>The card you're backing up from or restoring to. <strong>Refresh</strong> re-scans for disks.</td></tr>
+  <tr><td>Backup</td><td>Where to save the image. <strong>Save as…</strong> picks a file, <strong>Start backup</strong> runs it.</td></tr>
+  <tr><td>Restore</td><td>Which image to write. <strong>Open image…</strong> picks a file, <strong>Start restore</strong> runs it. Erases the device.</td></tr>
+  <tr><td>Clone</td><td>Copy disk <strong>A</strong> onto disk <strong>B</strong>. Erases B.</td></tr>
+  <tr><td>Options</td><td><strong>Gzip compress backups</strong> and <strong>Verify after writing</strong>. Both are on by default.</td></tr>
+  <tr><td>Progress (bottom)</td><td>Current step, bytes done, percentage, speed and time left. <strong>Cancel</strong> stops the job.</td></tr>
+</table>
+<p>Each disk in the lists looks like this:</p>
+<pre><code>Disk 2: Generic STORAGE DEVICE USB Device #000000001536  |  29.7 GB  |  E: F:</code></pre>
+<p>That's the Windows disk number, the reader's model name, its serial if it has one, the size, and any drive letters Windows gave the card's partitions. A Pi card usually only shows one letter (the small boot partition) because Windows can't read the Linux one.</p>
+
+<h2 id="your-first-backup">Your first backup</h2>
+<ol>
+  <li>Pick the card under <strong>Device</strong>.</li>
+  <li>Click <strong>Save as…</strong> and choose a name, for example <code>pihole-2026-10.img.gz</code>.</li>
+  <li>Leave both options ticked and click <strong>Start backup</strong>.</li>
+  <li>Wait for "Backup complete and verified". You'll have two files: the image and a small <code>.hash.txt</code> beside it. Keep them together.</li>
+</ol>
+<p>That's it. The other pages go through each job in more detail.</p>
+
+</article>
+<div class="pager"><a href="index.html">&larr; Overview</a><a href="backup.html">Backup &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

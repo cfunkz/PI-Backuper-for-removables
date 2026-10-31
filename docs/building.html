@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building from source | PI-Backuper</title>
+<meta name="description" content="Run it from Python, build your own exe, and run the tests.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.1.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html" class="active">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Building from source</h1>
+<p class="lead">Run it from Python, build your own exe, and run the tests.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li>Windows 10 or 11</li>
+  <li>Python 3.10 or newer, with Tkinter (it's included in the python.org installer)</li>
+  <li>The two runtime packages: <code>pywin32</code> and <code>WMI</code></li>
+</ul>
+
+<h2 id="run-from-source">Run from source</h2>
+<p>Open a terminal <strong>as Administrator</strong>, then:</p>
+<pre><code>git clone https://github.com/cfunkz/PI-Backuper.git
+cd PI-Backuper
+pip install -r requirements.txt
+python main.py</code></pre>
+<p><code>python -m pi_backuper</code> works too. On anything other than Windows, <code>main.py</code> exits straight away with "PI-Backuper only runs on Windows."</p>
+
+<h2 id="build-the-exe">Build the exe</h2>
+<pre><code>pip install -r requirements.txt pyinstaller
+
+pyinstaller --onefile --noconsole --uac-admin --name PI-Backuper ^
+  --icon favicon.ico ^
+  --add-data "favicon.ico;." ^
+  main.py</code></pre>
+<p>The result is <code>dist\PI-Backuper.exe</code>. What the flags do:</p>
+<table>
+  <tr><th>Flag</th><th>Why</th></tr>
+  <tr><td><code>--onefile</code></td><td>One portable exe instead of a folder.</td></tr>
+  <tr><td><code>--noconsole</code></td><td>No black console window behind the app.</td></tr>
+  <tr><td><code>--uac-admin</code></td><td>Asks for admin rights on launch, so users don't have to right-click.</td></tr>
+  <tr><td><code>--icon favicon.ico</code></td><td>Icon for the exe file in Explorer.</td></tr>
+  <tr><td><code>--add-data "favicon.ico;."</code></td><td>Bundles the icon so the window's title bar can use it too.</td></tr>
+</table>
+<p>The <code>^</code> characters are line continuations for <code>cmd.exe</code>. In PowerShell use a backtick <code>`</code> instead, or put it all on one line.</p>
+
+<h2 id="tests">Tests</h2>
+<p>The imaging code doesn't depend on Windows, so the tests run anywhere, including Linux and macOS:</p>
+<pre><code>pip install pytest
+python -m pytest</code></pre>
+<p>They run backup, restore and clone against fake in-memory disks. Among other things they check:</p>
+<ul>
+  <li>backup then restore gives back identical data, compressed and uncompressed</li>
+  <li>a gzip image that doesn't end on a sector boundary leaves the rest of that sector alone</li>
+  <li>old MD5 hash files still work</li>
+  <li>a damaged image is refused and the disk is left blank</li>
+  <li>an image too big for the device is refused before anything's written</li>
+  <li>verify catches a card that silently drops writes</li>
+  <li>clone copies everything and refuses a smaller target</li>
+  <li>a cancelled or failed backup leaves no files behind</li>
+  <li>a write error stops the reader thread too</li>
+  <li>a new backup replaces an old hash file</li>
+</ul>
+<p>GitHub Actions runs the tests on Ubuntu and Windows for every push and pull request. On Windows it also checks that the Windows-only modules import cleanly.</p>
+
+<h2 id="project-layout">Project layout</h2>
+<pre><code>main.py                  entry point (what PyInstaller builds)
+pi_backuper/__init__.py  name, version, author, licence
+pi_backuper/__main__.py  lets you run "python -m pi_backuper"
+pi_backuper/imaging.py   backup / restore / clone / verify, no Windows code
+pi_backuper/windisk.py   finding disks, raw access, volume locking (Windows only)
+pi_backuper/gui.py       Tkinter window
+pi_backuper/fmt.py       "29.7 GB" and "3m 05s left" formatting
+tests/                   tests for imaging.py using fake in-memory disks
+favicon.ico              app icon
+requirements.txt         pywin32, WMI
+pyproject.toml           package metadata</code></pre>
+<p>See <a href="how-it-works.html">How it works</a> for what's inside each module.</p>
+
+</article>
+<div class="pager"><a href="troubleshooting.html">&larr; Troubleshooting</a><a href="how-it-works.html">How it works &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+__title__ = "PI-Backuper"
+__version__ = "1.1.0"
+__author__ = "cFunkz"
+__license__ = "MIT"
+__url__ = "https://github.com/cfunkz/PI-Backuper"
+__description__ = "Raw backup, restore and clone for SD cards and USB drives on Windows."

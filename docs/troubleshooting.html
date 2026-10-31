@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting | PI-Backuper</title>
+<meta name="description" content="Error messages, what they mean, and what to try.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.1.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html" class="active">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Troubleshooting</h1>
+<p class="lead">Error messages, what they mean, and what to try.</p>
+<h2 id="getting-started">Getting started</h2>
+<h3 id="please-run-pi-backuper-as-administrator">"Please run PI-Backuper as Administrator"</h3>
+<p>Raw disk access needs admin rights. Right-click the exe and choose <em>Run as administrator</em>. If you're running from source, open the terminal as Administrator first.</p>
+
+<h3 id="no-removable-devices-found">"No removable devices found"</h3>
+<ul>
+  <li>Press <strong>Refresh</strong> after plugging the card in. Some readers take a few seconds to show up.</li>
+  <li>Check Disk Management (<code>diskmgmt.msc</code>). If the card isn't there either, it's the reader, the cable or the card.</li>
+  <li>Built-in laptop card readers on PCIe sometimes report as fixed disks and are filtered out. Use a USB reader.</li>
+  <li>External drives that Windows reports as neither USB nor removable won't be listed. That's on purpose.</li>
+</ul>
+
+<h3 id="windows-smartscreen-blocks-the-exe">Windows SmartScreen blocks the exe</h3>
+<p>The exe isn't code-signed. Click <em>More info</em> and <em>Run anyway</em>, or <a href="building.html">build it from source</a>.</p>
+
+<h2 id="before-a-job-starts">Before a job starts</h2>
+<h3 id="couldnt-lock">"Couldn't lock E:. Close any Explorer windows or programs using it and try again."</h3>
+<p>Something has the card open. Close Explorer windows showing the card, any file open from it, and anything like a photo importer or backup tool that grabs new drives. Antivirus scanning a freshly plugged-in drive is another common cause; wait a minute and try again.</p>
+
+<h3 id="disk-n-changed-or-was-unplugged-since-the-list-was-refreshed">"Disk N changed or was unplugged since the list was refreshed"</h3>
+<p>The card was swapped, re-inserted or removed after the list was loaded. Press <strong>Refresh</strong>, pick the disk again and restart the job.</p>
+
+<h3 id="the-image-is-bigger-than-the-device">"The image (…) is bigger than the device"</h3>
+<p>The target card is smaller than the one the image came from. See <a href="restore.html#card-sizes">Card sizes</a>. Use a bigger card, or shrink the image on Linux with a tool like PiShrink.</p>
+
+<h3 id="target-is-smaller-than-source">"Target … is smaller than source"</h3>
+<p>Same thing for clone. B has to be at least as big as A.</p>
+
+<h3 id="not-enough-space">"Not enough space"</h3>
+<p>The folder you're saving to doesn't have room for an uncompressed image of the card. Turn on compression, or save somewhere else.</p>
+
+<h2 id="during-a-job">During a job</h2>
+<table>
+  <tr><th>Message</th><th>What it means</th></tr>
+  <tr><td>Access denied</td><td>Something still has the disk open, or the card is write-protected. Close other programs and check the lock switch.</td></tr>
+  <tr><td>The device is write-protected</td><td>Slide the little lock switch on the SD card or adapter up (away from the contacts).</td></tr>
+  <tr><td>The device isn't ready</td><td>The card or reader went away. Was it unplugged or did the cable wobble?</td></tr>
+  <tr><td>Data error (CRC)</td><td>The card has bad sectors. It's dying. Get the data off if you still can and replace it.</td></tr>
+  <tr><td>Not enough free space</td><td>The disk you're saving to filled up, usually because the image compressed less than expected.</td></tr>
+  <tr><td>The device reported a hardware error</td><td>The card or reader failed. Try a different reader before blaming the card.</td></tr>
+  <tr><td>I/O error</td><td>The card or reader is failing, or it was unplugged.</td></tr>
+  <tr><td>The device was disconnected</td><td>Just that. Check the USB connection. Front-panel ports and hubs are a frequent cause.</td></tr>
+  <tr><td>Short read / Short write at byte …</td><td>The device stopped answering mid-job. Usually unplugged or a flaky USB connection.</td></tr>
+</table>
+<p>Each of these ends with the Windows function and error code in brackets. Handy if you report a bug.</p>
+
+<h2 id="verify-failures">Verify failures</h2>
+<h3 id="read-back-check-failed-the-device-didn-t-keep-what-was-written">"Read-back check failed: the device didn't keep what was written"</h3>
+<p>What was read back from the card isn't what was written. The card is worn out or fake. Run the job again with a different card. If it happens on several cards, try another reader or USB port.</p>
+<p>To test a card's real capacity, use a tool like H2testw (Windows) or F3 (Linux/macOS).</p>
+
+<h3 id="the-image-file-doesn-t-match-what-was-read-from-the-device">"The image file doesn't match what was read from the device"</h3>
+<p>This one's on the PC side: the backup file didn't come out the same as what was read from the card. The disk you saved to may be failing. Try saving somewhere else.</p>
+
+<h3 id="the-image-doesn-t-match-its-hash-txt-file-so-it-s-damaged">"The image doesn't match its .hash.txt file, so it's damaged"</h3>
+<p>The image file has changed since the backup was made: a bad download, a failing drive, or a copy that got cut short. The card was left blank. Use another copy of the backup if you have one. If you're sure the image is fine and the hash file is the wrong one (say you renamed files and mixed them up), move the <code>.hash.txt</code> away and the restore will go ahead without that check.</p>
+
+<h2 id="after-a-job">After a job</h2>
+<h3 id="the-device-is-now-blank-or-only-partly-written">"The device is now blank or only partly written"</h3>
+<p>A restore or clone was cancelled or failed. That's the safety net working. Run it again before putting the card in a Pi.</p>
+
+<h3 id="windows-asks-to-format-the-card">Windows asks to format the card</h3>
+<p>Windows can't read Linux partitions, so it offers to format them. Click <strong>Cancel</strong>.</p>
+
+<h3 id="the-card-is-bigger-than-the-image-and-the-extra-space-is-missing">The card is bigger than the image and the extra space is missing</h3>
+<p>Expected. The partitions are exactly as they were on the original card. Expand the filesystem on the Pi with <code>sudo raspi-config</code> → Advanced Options → Expand Filesystem.</p>
+
+<h3 id="the-backup-is-much-bigger-than-the-space-in-use">The backup is much bigger than the space in use</h3>
+<p>Deleted files leave old data behind, which doesn't compress. See the free-space tip on <a href="gzip.html">Image formats</a>.</p>
+
+<h2 id="speed">Speed</h2>
+<p>The speed shown is averaged over the last few seconds. Some rough numbers for what's normal:</p>
+<ul>
+  <li>USB 2.0 readers top out around 20 to 40 MB/s.</li>
+  <li>A good USB 3 reader with a decent card reads at 80 to 100 MB/s or more.</li>
+  <li>Writes are usually slower than reads, sometimes a lot slower on cheap cards.</li>
+</ul>
+<p>If it's slower than you'd expect, try a USB 3 port on the back of the PC rather than a hub or front-panel port. The app reads and writes at the same time with a 32 MiB buffer in between, so the slower of the two devices sets the pace.</p>
+
+<h2 id="still-stuck">Still stuck?</h2>
+<p>Open an issue on <a href="https://github.com/cfunkz/PI-Backuper/issues">GitHub</a> with the exact error text, what you were doing, your Windows version and the card/reader model.</p>
+
+</article>
+<div class="pager"><a href="safety.html">&larr; Safety checks</a><a href="building.html">Building from source &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

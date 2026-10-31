@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verification and hashes | PI-Backuper</title>
+<meta name="description" content="How PI-Backuper knows a copy is good, and what&#x27;s in the .hash.txt file.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.1.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html" class="active">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Verification and hashes</h1>
+<p class="lead">How PI-Backuper knows a copy is good, and what's in the .hash.txt file.</p>
+<h2 id="two-different-checks">Two different checks</h2>
+<p>There are two separate questions, and the app answers both.</p>
+<ol>
+  <li><strong>Is the image file still intact?</strong> That's what the <code>.hash.txt</code> is for. It's written at backup time and checked at every restore, no matter what the verify option is set to.</li>
+  <li><strong>Did the destination actually keep what was written?</strong> That's <em>Verify after writing</em>. Everything written is read back and hashed again.</li>
+</ol>
+
+<h2 id="verify-after-writing">Verify after writing</h2>
+<p>SD cards fail quietly. A worn-out card can accept writes and hand back different data later. A fake card that says 128 GB but really holds 16 GB will happily take writes past its real size and throw them away. Neither tells Windows anything is wrong. The only way to know is to read it back.</p>
+<table>
+  <tr><th>Job</th><th>What's read back</th><th>Compared with</th></tr>
+  <tr><td>Backup</td><td>The new image file, decompressed</td><td>The hash of what came off the card</td></tr>
+  <tr><td>Restore</td><td>The card, for the length of the image</td><td>The hash of the image</td></tr>
+  <tr><td>Clone</td><td>All of card B, for the size of A</td><td>The hash of card A</td></tr>
+</table>
+<p>It roughly doubles the time of a restore or clone, since reading the card is about as slow as writing it. Turn it off when you're in a hurry and trust the card. For anything you care about, leave it on.</p>
+<p>If verify fails on a restore or clone you'll see "Read-back check failed: the device didn't keep what was written. The card may be worn out or fake." Try another card. If it fails on a backup, the problem is the drive you're saving to.</p>
+
+<h2 id="the-hash-txt-file">The .hash.txt file</h2>
+<p>Every backup gets a sidecar file named after the image with <code>.hash.txt</code> on the end. It's one line of plain text:</p>
+<pre><code>sha256 31914983424 9f2c4e...e81b</code></pre>
+<ul>
+  <li>The hash algorithm. New backups always use <code>sha256</code>.</li>
+  <li>The size in bytes of the <em>uncompressed</em> image, which is the size of the card it came from.</li>
+  <li>The hex digest of the uncompressed image.</li>
+</ul>
+<p>The hash is always of the raw disk contents, never the <code>.gz</code> file. So you can decompress or recompress an image yourself and the hash file still applies.</p>
+<p>The size matters for gzip images. Gzip can only record sizes up to 4 GiB, so for bigger cards the hash file is the only place the real size is kept. That's how restore knows up front whether an image will fit.</p>
+
+<h3 id="checking-a-hash-by-hand">Checking a hash by hand</h3>
+<p>For a plain <code>.img</code>, in PowerShell:</p>
+<pre><code>Get-FileHash .\pihole.img -Algorithm SHA256</code></pre>
+<p>For an <code>.img.gz</code> you have to hash the decompressed data. On Linux or WSL:</p>
+<pre><code>gunzip -c pihole.img.gz | sha256sum</code></pre>
+<p>Compare the result with the last field in the <code>.hash.txt</code>. Windows prints it in upper case; that doesn't matter.</p>
+
+<h2 id="older-backups-1-0-x">Older backups (1.0.x)</h2>
+<p>Version 1.0.x used the same one-line format, and some of those files say <code>md5</code> instead of <code>sha256</code>. Those still work. When restoring, the app uses whatever algorithm the file names, both for checking the image and for the read-back.</p>
+<p>A hash file that's missing or can't be read is treated as "no hash file". The restore goes ahead and the confirmation dialog tells you the image can't be checked.</p>
+
+<h2 id="how-a-backup-s-files-are-written">How a backup's files are written</h2>
+<ol>
+  <li>The image goes to <code>name.img.gz.partial</code>.</li>
+  <li>When it's finished it's flushed to disk and, with verify on, read back and checked.</li>
+  <li>Any old <code>.hash.txt</code> with the same name is deleted.</li>
+  <li>The <code>.partial</code> file is renamed to its real name.</li>
+  <li>The new <code>.hash.txt</code> is written (also via a temporary file and a rename).</li>
+</ol>
+<p>So at no point is there a finished-looking image with a half-written or stale hash file next to it.</p>
+
+</article>
+<div class="pager"><a href="clone.html">&larr; Clone</a><a href="gzip.html">Image formats &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>
