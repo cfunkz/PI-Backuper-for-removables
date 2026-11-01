@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tk8.6
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q -rs
+      - name: The app imports with this OS's disk code
+        run: python -c "import pi_backuper.disks, pi_backuper.gui; print(pi_backuper.disks.list_disks())"
+
+  build:
+    # The app as people download it, for each platform, started once to prove it runs.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: ubuntu-22.04
+            program: dist/PI-Backuper
+          - os: ubuntu-22.04-arm  # Raspberry Pi and other 64-bit ARM Linux
+            program: dist/PI-Backuper
+          - os: macos-latest  # Apple silicon
+            program: dist/PI-Backuper.app/Contents/MacOS/PI-Backuper
+          - os: macos-15-intel
+            program: dist/PI-Backuper.app/Contents/MacOS/PI-Backuper
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tk8.6
+      - run: pip install -r requirements.txt pyinstaller pillow
+      - run: python build.py  # the same files a release publishes
+      # The Windows exe has no console, so there's nothing to check it with here.
+      - if: matrix.program
+        run: ${{ matrix.program }} --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: dist/release/*
+          if-no-files-found: error

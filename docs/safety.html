@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Safety checks | PI-Backuper</title>
+<meta name="description" content="Raw disk tools can wipe the wrong drive in one click. Here&#x27;s everything PI-Backuper does to make that hard.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.0.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html" class="active">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Safety checks</h1>
+<p class="lead">Raw disk tools can wipe the wrong drive in one click. Here's everything PI-Backuper does to make that hard.</p>
+<h2 id="only-removable-disks-are-listed">Only removable disks are listed</h2>
+<p>The lists only show disks Windows reports as USB or removable media. Internal SATA and NVMe drives never appear. On top of that, the disk Windows itself runs from is always skipped, even if it happens to be on USB. Card readers with no card in them are hidden too.</p>
+
+<h2 id="the-right-disk-every-time">The right disk, every time</h2>
+<p>Windows reuses disk numbers. If you pull a card and plug in another one, "Disk 2" can now be a different card. So each disk is remembered by its number, hardware ID, serial and exact size. When you start a job, and again right after you click Yes in the erase dialog, the disk is looked up fresh and all of those have to match. If not, you get "Disk N changed or was unplugged since the list was refreshed. Press Refresh and pick it again."</p>
+
+<h2 id="confirmation-before-erasing">Confirmation before erasing</h2>
+<p>Restore and clone always ask first, with a warning dialog that names the disk in full. The default button is <strong>No</strong>, so a stray Enter key does nothing.</p>
+
+<h2 id="never-your-own-files">Never your own files</h2>
+<ul>
+  <li>You can't save a backup onto the card you're backing up.</li>
+  <li>You can't restore an image that's stored on the card you're restoring to.</li>
+</ul>
+
+<h2 id="no-half-restored-cards">No half-restored cards</h2>
+<p>Restore and clone blank the first 4 MiB of the target before writing anything else, and write the real data there last. That area holds the partition table. Until the very end, the card has no partitions as far as any computer is concerned.</p>
+<p>Why it matters: a card that's 90% restored still has a valid partition table and will happily boot, then fall over in strange ways later because half its files are from the old system. A blank card is obviously broken and you just run the restore again.</p>
+<p>This covers cancel, errors, a pulled cable and a power cut.</p>
+
+<h2 id="damaged-images-are-caught">Damaged images are caught</h2>
+<p>If the image has a <code>.hash.txt</code>, its hash is worked out as it's written. A mismatch stops the restore before the partition table goes on, so the card stays blank. See <a href="verification.html">Verification and hashes</a>.</p>
+
+<h2 id="size-checks">Size checks</h2>
+<ul>
+  <li>An image bigger than the target is refused before writing starts, whenever the size is known.</li>
+  <li>When it isn't known up front (a gzip image with no hash file), writing stops the moment it would go past the end of the card.</li>
+  <li>Clone refuses a target smaller than the source.</li>
+</ul>
+
+<h2 id="no-half-written-backups">No half-written backups</h2>
+<p>Backups are written to <code>name.partial</code> and only get their real name after they're complete, flushed and verified. On cancel or error the partial file is deleted. An existing backup with the same name is never touched until the new one is ready.</p>
+
+<h2 id="nothing-else-touches-the-card">Nothing else touches the card</h2>
+<p>Before writing, every volume on the target is locked and dismounted. That stops Windows, Explorer, antivirus or anything else from writing to the card while it's being overwritten. If a volume can't be locked, the job doesn't start. The lock is retried for a few seconds first, because Explorer and antivirus often hold a disk open briefly.</p>
+<p>Source disks (backup, and A in a clone) are locked too when Windows allows it, but not dismounted. If that lock fails you get a note and the job carries on.</p>
+
+<h2 id="free-space">Free space</h2>
+<p>An uncompressed backup won't start if the folder hasn't got room for the whole card. A compressed one warns you and lets you decide.</p>
+
+<h2 id="no-sleep-mid-job">No sleep mid-job</h2>
+<p>Windows is told to stay awake while a job runs, so a long backup on a laptop doesn't get cut off by the sleep timer. (Closing the lid can still put it to sleep, depending on your power settings.)</p>
+
+<h2 id="closing-the-window">Closing the window</h2>
+<p>If you close the app while a job is running, it asks first. Saying yes cancels the job cleanly (deleting partial files, leaving cards blank rather than half-written) and then closes.</p>
+
+<h2 id="plain-english-errors">Plain-English errors</h2>
+<p>Common Windows errors such as "write-protected", "device not ready" or "data error (CRC)" are turned into a sentence that says what's actually wrong. See <a href="troubleshooting.html">Troubleshooting</a>.</p>
+
+</article>
+<div class="pager"><a href="gzip.html">&larr; Image formats</a><a href="troubleshooting.html">Troubleshooting &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Only Windows needs extra packages. Linux and macOS use the standard library.
+pywin32>=311; sys_platform == "win32"
+WMI>=1.5.1; sys_platform == "win32"

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PI-Backuper</title>
+<meta name="description" content="Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows, macOS and Linux. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn&#x27;t cost you your setup.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.0.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html" class="active">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>PI-Backuper</h1>
+<p class="lead">Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows, macOS and Linux. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn't cost you your setup.</p>
+
+<h2 id="what-it-does">What it does</h2>
+<p>You spent an evening getting a Pi set up just right. PI-Backuper takes a full copy of that SD card and saves it as a file on your PC. When the card dies, or you break something, you write the file back to a card and you're exactly where you were.</p>
+<ul>
+  <li><strong>Backup</strong> reads a whole card into an <code>.img</code> or <code>.img.gz</code> file.</li>
+  <li><strong>Restore</strong> writes an image file back onto a card.</li>
+  <li><strong>Clone</strong> copies one card straight onto another, no file in between.</li>
+</ul>
+<p>It copies the disk byte for byte, so it doesn't care what's on it. Raspberry Pi OS, Ubuntu, LibreELEC, a Windows installer stick, an encrypted drive: if your computer sees it as a removable or USB disk, it works.</p>
+
+<h2 id="why-bother-with-this-one">Why bother with this one</h2>
+<ul>
+  <li><strong>Verify after writing.</strong> Everything written is read back and hashed. That's how you find out a card is fake or worn out before you rely on it.</li>
+  <li><strong>SHA-256 hash next to every backup</strong>, so a damaged image is caught before it gets written to a card.</li>
+  <li><strong>No half-restored cards.</strong> If a restore stops partway, the card comes out blank, not "boots and then corrupts itself".</li>
+  <li><strong>Hard to point at the wrong disk.</strong> Only removable disks are listed, never the one your system runs from, and the disk is re-checked after you confirm.</li>
+  <li><strong>Fast.</strong> Reading and writing happen at the same time, and compression is tuned so it doesn't hold back fast readers.</li>
+  <li><strong>Portable.</strong> One <code>.exe</code>, no Python, nothing to install.</li>
+</ul>
+
+<h2 id="where-to-start">Where to start</h2>
+<div class="cards">
+  <a href="getting-started.html"><strong>Getting started</strong><span>Download, run, first backup.</span></a>
+  <a href="backup.html"><strong>Backup</strong><span>Card to image file.</span></a>
+  <a href="restore.html"><strong>Restore</strong><span>Image file back to a card.</span></a>
+  <a href="clone.html"><strong>Clone</strong><span>Card to card.</span></a>
+  <a href="safety.html"><strong>Safety checks</strong><span>Everything it does so you don't lose data.</span></a>
+  <a href="troubleshooting.html"><strong>Troubleshooting</strong><span>Error messages and what to do.</span></a>
+</div>
+
+<div class="note"><p>Raspberry Pi is a trademark of the Raspberry Pi Foundation. PI-Backuper is an independent community project and isn't affiliated with or endorsed by them.</p></div>
+
+</article>
+<div class="pager"><span></span><a href="getting-started.html">Getting started &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

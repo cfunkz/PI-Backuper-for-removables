@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backup | PI-Backuper</title>
+<meta name="description" content="Read a whole card into an image file on your PC.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.0.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html" class="active">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Backup</h1>
+<p class="lead">Read a whole card into an image file on your PC.</p>
+<h2 id="steps">Steps</h2>
+<ol>
+  <li>Choose the card under <strong>Device</strong>. Shut the Pi down properly before you pull the card, otherwise the backup is of a filesystem that was in the middle of being written.</li>
+  <li>Click <strong>Save as…</strong> and pick a file name. You can also type a path straight into the box.</li>
+  <li>Decide on the two options (see below) and click <strong>Start backup</strong>.</li>
+</ol>
+<p>You'll see two steps in the progress area: <strong>Reading</strong> (copying the card) and, if verify is on, <strong>Verifying</strong> (reading the new file back).</p>
+
+<h2 id="options">Options</h2>
+<h3 id="gzip-compress-backups">Gzip compress backups</h3>
+<p>On by default. The image is saved as <code>.img.gz</code>. A Pi card is mostly empty space, and empty space compresses to almost nothing, so a 32 GB card with 4 GB used often ends up around 2 to 3 GB.</p>
+<p>PI-Backuper uses the fastest gzip level on purpose. Empty space compresses just as well at that level, and anything higher makes the CPU the bottleneck on a fast USB 3 reader.</p>
+<p>Ticking or unticking this box switches the extension in the path box between <code>.img</code> and <code>.img.gz</code> for you.</p>
+<p>Turn it off if you want a plain <code>.img</code> to open in another tool or mount directly. Plain images are the full size of the card.</p>
+
+<h3 id="verify-after-writing">Verify after writing</h3>
+<p>On by default. After the backup is written, the whole file is read back, decompressed and hashed. If the hash doesn't match what came off the card, the backup is thrown away and you get an error. This catches a failing hard drive or USB stick on the PC side. It adds a bit of time, mostly on big uncompressed images.</p>
+
+<h2 id="what-you-end-up-with">What you end up with</h2>
+<pre><code>pihole-2026-10.img.gz
+pihole-2026-10.img.gz.hash.txt</code></pre>
+<p>The <code>.hash.txt</code> file holds the SHA-256 of the card's contents and its exact size. Restore uses it to check the image hasn't been damaged since. Always copy the two files together. See <a href="verification.html">Verification and hashes</a> for the format.</p>
+
+<h2 id="checks-before-it-starts">Checks before it starts</h2>
+<ul>
+  <li><strong>The folder has to exist.</strong> It won't create one for you.</li>
+  <li><strong>Overwriting asks first.</strong> If the file already exists and you didn't just pick it in the Save dialog (which asks on its own), you get a "Replace it?" prompt.</li>
+  <li><strong>You can't save onto the card you're backing up.</strong> It checks which physical disk the save folder lives on.</li>
+  <li><strong>Free space.</strong> If you're saving uncompressed and the folder has less space than the card, it refuses. If you're compressing, it warns you and lets you try, since compressed images are usually much smaller.</li>
+  <li><strong>Same card as you picked.</strong> The disk is looked up again by hardware ID, serial and size, in case cards were swapped since you last pressed Refresh.</li>
+</ul>
+
+<h2 id="while-it-runs">While it runs</h2>
+<ul>
+  <li>The card's partitions are locked so nothing writes to them during the backup. If Windows won't allow a lock (Explorer has a window open on it, say), you'll get a note telling you not to touch that drive until it's done. The backup still goes ahead.</li>
+  <li>The image is written to <code>name.partial</code> first and only renamed once it's complete, flushed to disk and verified.</li>
+  <li>Your PC is kept awake until the job finishes.</li>
+</ul>
+
+<h2 id="cancelling">Cancelling</h2>
+<p>Press <strong>Cancel</strong> at any time. The <code>.partial</code> file is deleted and you get "Backup cancelled. Nothing was saved." Any older backup with the same name is left untouched, because the new one never got renamed over it.</p>
+
+</article>
+<div class="pager"><a href="getting-started.html">&larr; Getting started</a><a href="restore.html">Restore &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

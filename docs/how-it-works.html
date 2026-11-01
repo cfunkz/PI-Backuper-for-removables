@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works | PI-Backuper</title>
+<meta name="description" content="A tour of the code for anyone who wants to change it, or just wants to know what it&#x27;s doing to their card.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.0.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html" class="active">How it works</a>
+</nav>
+<main>
+<article>
+<h1>How it works</h1>
+<p class="lead">A tour of the code for anyone who wants to change it, or just wants to know what it's doing to their card.</p>
+<p>The code is split into three layers that only talk downwards:</p>
+<pre><code>gui.py      the window; runs jobs on a worker thread
+  │
+  ├── disks/       list disks, open them raw, lock or unmount volumes
+  │     windows.py, macos.py, linux.py (one is picked at startup)
+  └── imaging.py   backup / restore / clone / verify, pure Python</code></pre>
+<p><code>imaging.py</code> never imports anything OS-specific. It works on any object that looks like a disk, which is why the tests can run on Linux with fake disks in memory.</p>
+
+<h2 id="imaging-py">imaging.py</h2>
+<h3 id="the-device-interface">The device interface</h3>
+<p>Anything with these is a device:</p>
+<table>
+  <tr><th>Member</th><th>Meaning</th></tr>
+  <tr><td><code>size</code></td><td>Total size in bytes.</td></tr>
+  <tr><td><code>sector</code></td><td>Sector size, usually 512 or 4096.</td></tr>
+  <tr><td><code>read(offset, length)</code></td><td>Read bytes. Offsets and lengths are whole sectors.</td></tr>
+  <tr><td><code>write(offset, data)</code></td><td>Write bytes. Same rule.</td></tr>
+  <tr><td><code>flush()</code></td><td>Make sure writes have reached the device.</td></tr>
+</table>
+
+<h3 id="jobs">Jobs</h3>
+<table>
+  <tr><th>Function</th><th>What it does</th></tr>
+  <tr><td><code>backup(dev, out_path, job, compress=True, verify=True)</code></td><td>Images the whole device to <code>out_path</code> via a <code>.partial</code> file, writes the <code>.hash.txt</code>, returns the SHA-256.</td></tr>
+  <tr><td><code>restore(image_path, dev, job, verify=True)</code></td><td>Writes a plain or gzip image from sector 0, checks it against the hash file, writes the first block last.</td></tr>
+  <tr><td><code>clone(src, dst, job, verify=True)</code></td><td>Copies <code>src</code> onto <code>dst</code> the same way.</td></tr>
+</table>
+<p>Each raises <code>Cancelled</code> if the job was cancelled, <code>VerifyError</code> if a hash check fails, <code>ValueError</code> for size problems, and lets <code>OSError</code> from the device through.</p>
+
+<h3 id="job">Job</h3>
+<p><code>Job</code> is a small object shared between the GUI and the worker. It holds a cancel flag (<code>job.cancel()</code>, checked with <code>job.check()</code>) and a progress callback, <code>on_progress(phase, bytes_done, fraction)</code>. Progress calls are throttled to four a second so the GUI isn't flooded.</p>
+
+<h3 id="the-copy-loop">The copy loop</h3>
+<p><code>pump()</code> moves data in 4 MiB chunks. A reader thread pulls chunks from the source and puts them on a queue up to 8 deep (32 MiB). The main worker thread takes them off and writes them. So the source is being read while the target is being written, and the job runs at the speed of the slower device instead of the sum of both.</p>
+<p>Hashing happens on the reader side and gzip on the writer side. Both release Python's GIL on big buffers, so they run in parallel too. If either side fails, both stop and the first error is raised.</p>
+
+<h3 id="writing-the-first-block-last">Writing the first block last</h3>
+<p>Restore and clone read the first 4 MiB, write zeros there, copy everything else, and only then write the real first 4 MiB. See <a href="safety.html#no-half-restored-cards">No half-restored cards</a>.</p>
+
+<h3 id="partial-sectors">Partial sectors</h3>
+<p>A raw disk only accepts whole sectors, but a gzip image doesn't have to end on a sector boundary. <code>write_any()</code> writes the whole sectors directly, then reads the last sector from the device, overlays the leftover bytes and writes it back. Bytes past the end of the image are left as they were.</p>
+
+<h3 id="hash-file-helpers">Hash file helpers</h3>
+<p><code>read_sidecar()</code> returns <code>(algo, size, digest)</code> or <code>None</code> if the file is missing or unreadable. <code>write_sidecar()</code> writes through a temp file and a rename. <code>image_size()</code> gives the uncompressed size: the file size for plain images, the hash file's size for gzip ones, or <code>None</code> if it can't know.</p>
+
+<h2 id="disks">disks/</h2>
+<p>Every OS gets its own module with the same functions, and <code>disks/__init__.py</code> picks the right one when the app starts. The GUI only ever talks to that shared interface.</p>
+<table>
+  <tr><th>Name</th><th>What it does</th></tr>
+  <tr><td><code>list_disks()</code></td><td>USB and removable disks with media in them, never the system disk. Returns <code>Disk</code> records.</td></tr>
+  <tr><td><code>Disk</code></td><td>OS id (disk number, <code>sdb</code>, <code>disk4</code>), raw device path, size, model, serial, hardware ID and mount points. <code>label</code> is the text shown in the dropdowns.</td></tr>
+  <tr><td><code>recheck(disk)</code></td><td>Lists disks again and returns the fresh entry only if id, hardware ID, serial and size all still match. Otherwise raises.</td></tr>
+  <tr><td><code>claim_source(disk)</code></td><td>Context manager around a read. Windows locks the volumes, macOS unmounts and remounts afterwards, Linux leaves them alone. Yields anything it couldn't lock so the user can be warned.</td></tr>
+  <tr><td><code>claim_target(disk)</code></td><td>Context manager around a write. Locks and dismounts (Windows) or unmounts (macOS, Linux) every volume, or raises.</td></tr>
+  <tr><td><code>open_disk(disk, writable)</code></td><td>Opens the raw device. See below.</td></tr>
+  <tr><td><code>disks_holding(path)</code></td><td>Which physical disks a path is on. Used to stop you saving onto the card you're reading.</td></tr>
+  <tr><td><code>keep_awake()</code></td><td>Stops the machine sleeping mid-job (<code>SetThreadExecutionState</code>, <code>caffeinate</code>, <code>systemd-inhibit</code>).</td></tr>
+  <tr><td><code>is_admin()</code>, <code>relaunch_as_admin()</code></td><td>Checks for admin/root, and restarts the app through UAC, the macOS password dialog or <code>pkexec</code>.</td></tr>
+</table>
+<h3 id="per-os">Per OS</h3>
+<ul>
+  <li><strong>Windows</strong> finds disks through WMI and opens <code>\\.\PhysicalDriveN</code>. The real size comes from <code>IOCTL_DISK_GET_LENGTH_INFO</code> (WMI rounds it down). After writing it asks Windows to re-read the partition table.</li>
+  <li><strong>macOS</strong> asks <code>diskutil</code> for external and removable disks and opens <code>/dev/rdiskN</code>, the uncached raw node, which is several times faster than <code>/dev/diskN</code>. APFS volumes are traced back through their container to the physical disk.</li>
+  <li><strong>Linux</strong> reads <code>/sys/block</code> and <code>/proc/self/mountinfo</code> directly, so it needs no extra tools. It follows partitions, LVM and LUKS down to the physical disk to find the one the system runs from. Targets are opened with <code>O_EXCL</code>, which fails if anything is mounted and stops anything mounting while the job runs, and <code>O_DSYNC</code>, so the progress bar shows what really reached the card. Before verifying, the kernel's cached copy is dropped so the check reads the card itself.</li>
+</ul>
+
+<h2 id="gui-py">gui.py</h2>
+<p>A single Tkinter window. When you start a job it does all the checks on the main thread (so it can show dialogs), then runs the work on a background thread inside <code>keep_awake()</code>, the volume locks and the open disks, in that order.</p>
+<p>The worker never touches Tkinter directly. It puts messages on a queue (<code>progress</code>, <code>note</code>, <code>done</code>, <code>error</code>) and the window picks them up ten times a second. Speed and time-left are worked out from the last four seconds of progress, and reset whenever the phase changes (say from Writing to Verifying).</p>
+<p>All inputs are disabled while a job runs, so you can't start a second one or change the settings mid-job.</p>
+
+</article>
+<div class="pager"><a href="building.html">&larr; Building from source</a><span></span></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

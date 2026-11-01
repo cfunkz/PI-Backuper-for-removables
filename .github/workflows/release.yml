@@ -1,0 +1,81 @@
+name: Release
+
+# One command makes a release:   git tag vX.Y.Z && git push origin vX.Y.Z
+# (X.Y.Z must match __version__ in pi_backuper/__init__.py). It builds the Windows exe,
+# macOS .app zips for Apple silicon and Intel, and Linux builds for x64 and arm64
+# (Raspberry Pi), then publishes them as a GitHub release. A tag with a dash
+# (v1.1.0-beta1) becomes a pre-release. "Run workflow" on the Actions tab builds
+# them without releasing (download them from the run's artifacts).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          # Linux is built on 22.04 on purpose: the binary needs a glibc at least as new
+          # as the build machine's, and 22.04 is old enough for Raspberry Pi OS Bookworm,
+          # Debian 12 and anything newer.
+          - os: ubuntu-22.04
+            program: dist/PI-Backuper
+          - os: ubuntu-22.04-arm
+            program: dist/PI-Backuper
+          - os: macos-latest  # Apple silicon
+            program: dist/PI-Backuper.app/Contents/MacOS/PI-Backuper
+          - os: macos-15-intel
+            program: dist/PI-Backuper.app/Contents/MacOS/PI-Backuper
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version=$(python -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('pi_backuper/__init__.py').read()).group(1))")
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} doesn't match __version__ $version in pi_backuper/__init__.py"
+            exit 1
+          fi
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tk8.6
+      - run: pip install -r requirements.txt pyinstaller pillow
+      - run: python build.py
+      - if: matrix.program
+        run: ${{ matrix.program }} --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l release
+          (cd release && sha256sum * > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" \
+            --title "PI-Backuper ${GITHUB_REF_NAME#v}" --generate-notes \
+            $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)

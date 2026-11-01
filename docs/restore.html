@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restore | PI-Backuper</title>
+<meta name="description" content="Write an image file back onto a card. This erases the card.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button id="menu-btn" aria-label="Menu">&#9776;</button>
+  <a class="brand" href="index.html"><img src="favicon.ico" alt="">PI-Backuper <span class="ver">v1.0.0</span></a>
+  <div class="links">
+    <a href="https://github.com/cfunkz/PI-Backuper/releases">Download</a>
+    <a href="https://github.com/cfunkz/PI-Backuper">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+<nav class="side">
+<h4>Introduction</h4>
+<a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<h4>Using it</h4>
+<a href="backup.html">Backup</a>
+<a href="restore.html" class="active">Restore</a>
+<a href="clone.html">Clone</a>
+<h4>Details</h4>
+<a href="verification.html">Verification and hashes</a>
+<a href="gzip.html">Image formats</a>
+<a href="safety.html">Safety checks</a>
+<a href="troubleshooting.html">Troubleshooting</a>
+<h4>Developers</h4>
+<a href="building.html">Building from source</a>
+<a href="how-it-works.html">How it works</a>
+</nav>
+<main>
+<article>
+<h1>Restore</h1>
+<p class="lead">Write an image file back onto a card. This erases the card.</p>
+<div class="warn"><p>Restore wipes everything on the target device. Double-check the disk number, size and drive letters in the confirmation dialog before you click Yes.</p></div>
+
+<h2 id="steps">Steps</h2>
+<ol>
+  <li>Choose the target card under <strong>Device</strong>.</li>
+  <li>Click <strong>Open image…</strong> and pick an <code>.img</code> or <code>.img.gz</code> file.</li>
+  <li>Click <strong>Start restore</strong>.</li>
+  <li>Read the confirmation carefully. It names the exact disk that will be erased. The default button is <strong>No</strong>.</li>
+  <li>Wait for "Restore complete and verified. Safe to remove the device."</li>
+</ol>
+<p>Progress shows <strong>Writing</strong> and then, if verify is on, <strong>Verifying</strong>.</p>
+
+<h2 id="what-images-work">What images work</h2>
+<ul>
+  <li>Backups made by any version of PI-Backuper, including old ones with MD5 hash files.</li>
+  <li>Plain <code>.img</code> files from anywhere, such as an OS image you downloaded.</li>
+  <li>Gzipped images (<code>.img.gz</code>). The app checks the file's first bytes, not the extension, so a gzip file with a different name still works.</li>
+</ul>
+<p>Other formats like <code>.xz</code>, <code>.zip</code> or <code>.7z</code> aren't supported. Unpack them to a plain <code>.img</code> first.</p>
+
+<h2 id="with-and-without-a-hash-txt">With and without a .hash.txt</h2>
+<p>If the image has its <code>.hash.txt</code> beside it, the image is hashed while it's being written. If the result doesn't match the file, the restore stops with "The image doesn't match its .hash.txt file, so it's damaged" and the card is left blank. The real partition table is never written, so nothing tries to boot from a broken copy.</p>
+<p>If there's no <code>.hash.txt</code>, the confirmation dialog says so. The restore still works and verify still reads the card back to check it kept what was written. It just can't tell if the image file itself was damaged before you started.</p>
+
+<h2 id="card-sizes">Card sizes</h2>
+<p>The target must be at least as big as the image. Two "32 GB" cards from different brands are rarely exactly the same size, so an image from one may be a few megabytes too big for another. If the size is known up front (plain image, or gzip with a <code>.hash.txt</code>) it's checked before anything is written. For a gzip image with no hash file the size isn't known in advance, so the restore stops when it hits the end of the card and the card is left blank.</p>
+<p>Restoring onto a bigger card is fine. The extra space is left alone. On a Pi you can grow the root partition afterwards with <code>sudo raspi-config</code> → Advanced Options → Expand Filesystem.</p>
+
+<h2 id="what-happens-on-the-card">What happens on the card</h2>
+<ol>
+  <li>All of the card's volumes are locked and dismounted. If one can't be locked, the restore doesn't start (see <a href="troubleshooting.html#couldnt-lock">Couldn't lock</a>).</li>
+  <li>The first 4 MiB of the card (partition table and boot area) is overwritten with zeros.</li>
+  <li>The rest of the image is written.</li>
+  <li>The image's hash is checked against the <code>.hash.txt</code>, if there is one.</li>
+  <li>The real first 4 MiB is written last, and everything is flushed.</li>
+  <li>With verify on, the whole written area is read back and hashed.</li>
+  <li>Windows is told to re-read the partition table, so the new partitions show up.</li>
+</ol>
+<p>Because the start of the card is written last, a restore that gets cancelled, fails or loses power leaves a card that Windows sees as blank. You get a clear message saying so: "The device is now blank or only partly written. Run the restore or clone again before using it."</p>
+
+<h2 id="after-restoring">After restoring</h2>
+<p>Windows may pop up "You need to format the disk in drive X" for the Linux partition. Click <strong>Cancel</strong>. Formatting it would wipe what you just restored.</p>
+
+</article>
+<div class="pager"><a href="backup.html">&larr; Backup</a><a href="clone.html">Clone &rarr;</a></div>
+<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+</main>
+</div>
+<script src="site.js"></script>
+</body>
+</html>

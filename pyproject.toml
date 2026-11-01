@@ -1,0 +1,50 @@
+
+[project]
+name = "pi-backuper"
+version = "1.0.0"
+description = "Raw USB/SD backup, restore and clone tool for Windows, macOS and Linux."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+
+authors = [
+  { name = "cFunkz", email = "hello@routezero.tech" }
+]
+
+keywords = [
+  "raspberry-pi",
+  "backup",
+  "restore",
+  "disk-imaging",
+  "windows",
+  "macos",
+  "linux",
+  "usb",
+  "sd-card"
+]
+
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: System :: Archiving :: Backup",
+]
+
+# Runtime dependencies ONLY. Linux and macOS need nothing beyond the standard library.
+dependencies = [
+  "pywin32>=311; sys_platform == 'win32'",
+  "WMI>=1.5.1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+build = ["pyinstaller>=6.10", "pillow"]
+
+[project.urls]
+Homepage = "https://github.com/cfunkz/PI-Backuper"
+Repository = "https://github.com/cfunkz/PI-Backuper"
+Issues = "https://github.com/cfunkz/PI-Backuper/issues"
+Releases = "https://github.com/cfunkz/PI-Backuper/releases"
