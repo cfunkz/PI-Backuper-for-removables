@@ -1,0 +1,51 @@
+name: build
+
+# Builds the app on every OS. release.yml calls this for tags; it also runs on
+# pull requests so a broken build shows up before anything gets tagged, and
+# can be started by hand from the Actions tab.
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: windows-x64 }
+          - { os: macos-latest, target: macos-arm64 }
+          - { os: macos-15-intel, target: macos-x64 }
+          # Built on 22.04 on purpose: the binary needs a glibc at least as new as
+          # the build machine's, and 22.04 is old enough for Raspberry Pi OS
+          # Bookworm, Debian 12 and anything newer.
+          - { os: ubuntu-22.04, target: linux-x64 }
+          - { os: ubuntu-22.04-arm, target: linux-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tk8.6
+
+      - run: pip install -r requirements.txt pytest pyinstaller pillow
+      - run: python -m pytest -q
+      - run: python build.py
+
+      - name: Check the packaged app starts (Linux)
+        if: runner.os == 'Linux'
+        run: dist/PI-Backuper --version
+      - name: Check the packaged app starts (macOS)
+        if: runner.os == 'macOS'
+        run: dist/PI-Backuper.app/Contents/MacOS/PI-Backuper --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PI-Backuper-${{ matrix.target }}
+          path: dist/release/*
+          if-no-files-found: error

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PI-Backuper</title>
-<meta name="description" content="Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn&#x27;t cost you your setup.">
+<meta name="description" content="Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows, macOS and Linux. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn&#x27;t cost you your setup.">
 <link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -38,7 +38,7 @@
 <main>
 <article>
 <h1>PI-Backuper</h1>
-<p class="lead">Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn't cost you your setup.</p>
+<p class="lead">Back up, restore and clone Raspberry Pi SD cards (and any other USB drive) on Windows, macOS and Linux. Raw, sector by sector, with checks at every step so a bad card or a pulled cable doesn't cost you your setup.</p>
 
 <h2 id="what-it-does">What it does</h2>
 <p>You spent an evening getting a Pi set up just right. PI-Backuper takes a full copy of that SD card and saves it as a file on your PC. When the card dies, or you break something, you write the file back to a card and you're exactly where you were.</p>
@@ -47,14 +47,14 @@
   <li><strong>Restore</strong> writes an image file back onto a card.</li>
   <li><strong>Clone</strong> copies one card straight onto another, no file in between.</li>
 </ul>
-<p>It copies the disk byte for byte, so it doesn't care what's on it. Raspberry Pi OS, Ubuntu, LibreELEC, a Windows installer stick, an encrypted drive: if Windows sees it as a removable or USB disk, it works.</p>
+<p>It copies the disk byte for byte, so it doesn't care what's on it. Raspberry Pi OS, Ubuntu, LibreELEC, a Windows installer stick, an encrypted drive: if your computer sees it as a removable or USB disk, it works.</p>
 
 <h2 id="why-bother-with-this-one">Why bother with this one</h2>
 <ul>
   <li><strong>Verify after writing.</strong> Everything written is read back and hashed. That's how you find out a card is fake or worn out before you rely on it.</li>
   <li><strong>SHA-256 hash next to every backup</strong>, so a damaged image is caught before it gets written to a card.</li>
   <li><strong>No half-restored cards.</strong> If a restore stops partway, the card comes out blank, not "boots and then corrupts itself".</li>
-  <li><strong>Hard to point at the wrong disk.</strong> Only removable disks are listed, never the one Windows runs from, and the disk is re-checked after you confirm.</li>
+  <li><strong>Hard to point at the wrong disk.</strong> Only removable disks are listed, never the one your system runs from, and the disk is re-checked after you confirm.</li>
   <li><strong>Fast.</strong> Reading and writing happen at the same time, and compression is tuned so it doesn't hold back fast readers.</li>
   <li><strong>Portable.</strong> One <code>.exe</code>, no Python, nothing to install.</li>
 </ul>

@@ -5,18 +5,23 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.10"  # oldest supported
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install pytest
+          python-version: ${{ matrix.python }}
+      - name: Install Tk (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tk8.6
+      - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q
-      - name: Check the Windows modules import
-        if: runner.os == 'Windows'
-        run: |
-          pip install -r requirements.txt
-          python -c "import pi_backuper.windisk, pi_backuper.gui"
+      - name: Check the app imports with this OS's disk code
+        run: python -c "import pi_backuper.disks, pi_backuper.gui; print(pi_backuper.disks.list_disks())"

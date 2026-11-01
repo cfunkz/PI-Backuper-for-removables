@@ -41,20 +41,35 @@
 <p class="lead">What you need, how to run it, and a quick tour of the window.</p>
 <h2 id="what-you-need">What you need</h2>
 <ul>
-  <li>Windows 10 or 11</li>
+  <li>Windows 10 or 11, macOS 12 or newer, or a 64-bit Linux (Raspberry Pi OS Bookworm, Ubuntu 22.04, Debian 12 or newer)</li>
   <li>An administrator account (raw disk access needs it)</li>
-  <li>A USB SD card reader, or the built-in one if Windows lists it as removable</li>
+  <li>A USB SD card reader, or a built-in SD slot</li>
   <li>Free disk space for your backups. A compressed backup of a mostly empty card is small, but plan for up to the full card size.</li>
 </ul>
 
 <h2 id="download-and-run">Download and run</h2>
-<ol>
-  <li>Grab <code>PI-Backuper.exe</code> from the <a href="https://github.com/cfunkz/PI-Backuper/releases">Releases page</a>.</li>
-  <li>Double-click it. Windows will show a UAC prompt; say yes. The exe asks for admin rights by itself.</li>
-  <li>Put your SD card in the reader and press <strong>Refresh</strong> if it doesn't show up straight away.</li>
-</ol>
-<p>Windows SmartScreen may warn about an unknown publisher because the exe isn't code-signed. Click <em>More info</em> and then <em>Run anyway</em>, or <a href="building.html">build it yourself</a> from source if you'd rather.</p>
-<p>If you run it without admin rights you'll get "Please run PI-Backuper as Administrator" and the app closes. Right-click the exe and pick <em>Run as administrator</em>.</p>
+<p>Grab the file for your system from the <a href="https://github.com/cfunkz/PI-Backuper/releases">Releases page</a>:</p>
+<table>
+  <tr><th>System</th><th>File</th></tr>
+  <tr><td>Windows</td><td><code>PI-Backuper-…-windows-x64.exe</code></td></tr>
+  <tr><td>Mac with Apple silicon (M1 and newer)</td><td><code>PI-Backuper-…-macos-arm64.zip</code></td></tr>
+  <tr><td>Intel Mac</td><td><code>PI-Backuper-…-macos-x64.zip</code></td></tr>
+  <tr><td>Linux PC</td><td><code>PI-Backuper-…-linux-x64.tar.gz</code></td></tr>
+  <tr><td>Raspberry Pi (64-bit OS) and other ARM Linux</td><td><code>PI-Backuper-…-linux-arm64.tar.gz</code></td></tr>
+</table>
+
+<h3 id="windows">Windows</h3>
+<p>Double-click the exe and say yes to the UAC prompt; it asks for admin rights by itself. SmartScreen may warn about an unknown publisher because the exe isn't code-signed. Click <em>More info</em> and then <em>Run anyway</em>, or <a href="building.html">build it yourself</a>.</p>
+
+<h3 id="macos">macOS</h3>
+<p>Unzip it and move <code>PI-Backuper.app</code> to Applications. The app isn't signed by Apple, so the first time, right-click it and pick <em>Open</em> (or run <code>xattr -dr com.apple.quarantine /Applications/PI-Backuper.app</code>). It asks for your password because raw disk access needs root.</p>
+
+<h3 id="linux">Linux</h3>
+<pre><code>tar xzf PI-Backuper-*-linux-*.tar.gz
+./PI-Backuper</code></pre>
+<p>It offers to restart itself as root through your desktop's password prompt (<code>pkexec</code>). Without one, run <code>sudo ./PI-Backuper</code>. USB disks and SD cards are listed; the disk your system runs from never is.</p>
+
+<p>Then put your SD card in the reader and press <strong>Refresh</strong> if it doesn't show up straight away.</p>
 
 <h2 id="the-window">The window</h2>
 <table>
@@ -68,7 +83,7 @@
 </table>
 <p>Each disk in the lists looks like this:</p>
 <pre><code>Disk 2: Generic STORAGE DEVICE USB Device #000000001536  |  29.7 GB  |  E: F:</code></pre>
-<p>That's the Windows disk number, the reader's model name, its serial if it has one, the size, and any drive letters Windows gave the card's partitions. A Pi card usually only shows one letter (the small boot partition) because Windows can't read the Linux one.</p>
+<p>On Windows that's the disk number, the reader's model name, its serial if it has one, the size, and any drive letters Windows gave the card's partitions. A Pi card usually only shows one letter (the small boot partition) because Windows can't read the Linux one.</p>
 
 <h2 id="your-first-backup">Your first backup</h2>
 <ol>

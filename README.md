@@ -7,6 +7,8 @@
   <img src="https://img.shields.io/badge/GUI-Tkinter-blue?style=flat-square" alt="Tkinter">
   <img src="https://img.shields.io/badge/Built%20With-PyInstaller-3C873A?style=flat-square" alt="PyInstaller">
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/macOS-12%2B-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/Linux-x64%20%7C%20arm64-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
 </p>
 
 <p align="center">
@@ -24,19 +26,19 @@
 
 # PI-Backuper
 
-Removable media backup & restore tool for **Windows**.
+Removable media backup & restore tool for **Windows, macOS and Linux** (Raspberry Pi included).
 
 ---
 
 ## Features
 
 - Back up, restore and clone whole SD cards and USB drives (raw, sector by sector)
-- Only lists removable / USB disks, and never the disk Windows runs from
+- Only lists removable / USB / SD disks, and never the disk your system runs from
 - Optional gzip compression (empty space on a card shrinks to almost nothing)
 - SHA-256 hash saved next to every backup (`image.img.gz.hash.txt`)
 - Verify after writing: reads everything back and compares hashes, which catches dying and fake cards
 - Reader and writer run in parallel, with live speed and ETA
-- Portable `.exe`, no Python needed
+- Ready-made downloads for every OS, no Python needed
 
 ## Safety nets
 
@@ -47,8 +49,8 @@ Writing raw disks goes badly when it goes wrong, so the app is careful about it:
 - **No half-restored cards.** The start of the card (partition table) is wiped first and written last. If a restore or clone is cancelled, fails, or the power goes, the card shows up as blank instead of booting into something broken.
 - **Damaged images are caught.** If the image doesn't match its `.hash.txt`, the restore stops and the partition table is never written.
 - **No half-written backups.** Backups are written to `name.partial` and renamed only once they're complete and verified. Cancel or error, and the partial file is deleted.
-- **Nothing else touches the card.** Target volumes are locked and dismounted. Source volumes are locked too when Windows allows it.
-- **Free space check** before a backup starts. The PC is also kept from going to sleep while a job runs.
+- **Nothing else touches the card.** Target volumes are locked and dismounted (Windows) or unmounted (macOS, Linux). On Linux the card is opened exclusively, so nothing can mount it mid-restore.
+- **Free space check** before a backup starts. The computer is also kept from going to sleep while a job runs.
 - **Old backups still work.** `.img`, `.img.gz` and the old `.hash.txt` files (including MD5 ones) from 1.0.x restore and verify as before.
 
 ---
@@ -61,9 +63,9 @@ Writing raw disks goes badly when it goes wrong, so the app is careful about it:
 
 ## Requirements
 
-- Windows 10 / 11
-- **Administrator privileges**
-- USB SD card reader
+- Windows 10 / 11, macOS 12 or newer, or 64-bit Linux (Raspberry Pi OS Bookworm, Ubuntu 22.04, Debian 12 or newer)
+- **Administrator / root privileges** (the app offers to restart itself with them)
+- USB SD card reader or a built-in SD slot
 
 ---
 
@@ -81,7 +83,7 @@ This means it can back up **any removable USB media**, including:
 - Encrypted or unsupported filesystems (data is copied as-is)
 
 PI-Backuper does **not** depend on the filesystem or OS on the device.  
-If Windows can see it as a **removable USB disk**, it can be backed up.
+If your computer sees it as a **removable, USB or SD disk**, it can be backed up.
 
 ⚠ Internal system drives are intentionally **not supported** for safety.
 
@@ -89,8 +91,20 @@ If Windows can see it as a **removable USB disk**, it can be backed up.
 
 ## Usage
 
-1. Download the latest release from **Releases**
-2. Run `PI-Backuper.exe` (UAC prompt required)
+1. Download the file for your system from **Releases**:
+
+   | System | File |
+   |---|---|
+   | Windows | `PI-Backuper-…-windows-x64.exe` |
+   | Mac with Apple silicon | `PI-Backuper-…-macos-arm64.zip` |
+   | Intel Mac | `PI-Backuper-…-macos-x64.zip` |
+   | Linux PC | `PI-Backuper-…-linux-x64.tar.gz` |
+   | Raspberry Pi (64-bit) / ARM Linux | `PI-Backuper-…-linux-arm64.tar.gz` |
+
+2. Start it:
+   - **Windows:** run the exe and accept the UAC prompt.
+   - **macOS:** unzip, move `PI-Backuper.app` to Applications, then right-click it and pick *Open* the first time (it isn't signed by Apple). It asks for your password.
+   - **Linux:** `tar xzf PI-Backuper-*.tar.gz && ./PI-Backuper`. It asks for your password through `pkexec`, or run it with `sudo`.
 3. Select the device
 4. Backup, restore or clone
 
@@ -102,25 +116,40 @@ If Windows can see it as a **removable USB disk**, it can be backed up.
 
 ## Build (from source)
 
-```powershell
-pip install -r requirements.txt pyinstaller
-
-pyinstaller --onefile --noconsole --uac-admin --name PI-Backuper ^
-  --icon favicon.ico ^
-  --add-data "favicon.ico;." ^
-  main.py
+```
+pip install -r requirements.txt pyinstaller pillow
+python build.py
 ```
 
-Or run it straight from source in an Administrator terminal: `python main.py`
+That builds for whatever OS you run it on and leaves the result in `dist/release/`.
+Or run it straight from source: `python main.py` (it asks for admin/root rights when it starts).
+Linux needs Tkinter: `sudo apt install python3-tk` on Debian, Ubuntu and Raspberry Pi OS.
+
+## Releases
+
+GitHub Actions builds Windows x64, macOS (Apple silicon and Intel) and Linux (x64 and arm64) for every pull request.
+To publish a release, bump `__version__` in `pi_backuper/__init__.py`, commit, and push a matching tag:
+
+```
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+The release workflow refuses a tag that doesn't match `__version__`, then uploads all five builds and a `SHA256SUMS.txt`.
 
 ## Project layout
 
 ```
 main.py                  entry point (what PyInstaller builds)
-pi_backuper/imaging.py   backup / restore / clone / verify, no Windows code
-pi_backuper/windisk.py   finding disks, raw access, volume locking (Windows only)
+build.py                 builds and packs the app for the current OS
+pi_backuper/imaging.py   backup / restore / clone / verify, no OS-specific code
+pi_backuper/disks/       finding disks, raw access, locking/unmounting
+  windows.py             WMI, \\.\PhysicalDriveN, volume locks
+  macos.py               diskutil, /dev/rdiskN
+  linux.py               /sys and /proc, /dev/sdX and /dev/mmcblkN
 pi_backuper/gui.py       Tkinter window
-tests/                   tests for imaging.py using fake in-memory disks
+tests/                   tests using fake disks, /sys trees and diskutil output
+.github/workflows/       tests, builds, releases
 ```
 
 The tests run on any OS: `pip install pytest && python -m pytest`

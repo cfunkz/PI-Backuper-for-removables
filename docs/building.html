@@ -38,45 +38,44 @@
 <main>
 <article>
 <h1>Building from source</h1>
-<p class="lead">Run it from Python, build your own exe, and run the tests.</p>
+<p class="lead">Run it from Python, build the app for your OS, and run the tests.</p>
 <h2 id="requirements">Requirements</h2>
 <ul>
-  <li>Windows 10 or 11</li>
-  <li>Python 3.10 or newer, with Tkinter (it's included in the python.org installer)</li>
-  <li>The two runtime packages: <code>pywin32</code> and <code>WMI</code></li>
+  <li>Windows 10/11, macOS 12 or newer, or Linux (Raspberry Pi OS included)</li>
+  <li>Python 3.10 or newer, with Tkinter. The python.org installers include it; on Debian, Ubuntu and Raspberry Pi OS it's <code>sudo apt install python3-tk</code>.</li>
+  <li>On Windows only, the two runtime packages <code>pywin32</code> and <code>WMI</code>. Linux and macOS need nothing beyond the standard library.</li>
 </ul>
 
 <h2 id="run-from-source">Run from source</h2>
-<p>Open a terminal <strong>as Administrator</strong>, then:</p>
 <pre><code>git clone https://github.com/cfunkz/PI-Backuper.git
 cd PI-Backuper
 pip install -r requirements.txt
 python main.py</code></pre>
-<p><code>python -m pi_backuper</code> works too. On anything other than Windows, <code>main.py</code> exits straight away with "PI-Backuper only runs on Windows."</p>
+<p><code>python -m pi_backuper</code> works too. Raw disk access needs Administrator (Windows) or root (macOS, Linux). Start it without and it offers to restart itself with the right permissions: the UAC prompt on Windows, the password dialog on macOS, and <code>pkexec</code> on Linux. Or just start it that way yourself, for example <code>sudo python3 main.py</code>.</p>
 
-<h2 id="build-the-exe">Build the exe</h2>
-<pre><code>pip install -r requirements.txt pyinstaller
-
-pyinstaller --onefile --noconsole --uac-admin --name PI-Backuper ^
-  --icon favicon.ico ^
-  --add-data "favicon.ico;." ^
-  main.py</code></pre>
-<p>The result is <code>dist\PI-Backuper.exe</code>. What the flags do:</p>
+<h2 id="build-the-app">Build the app</h2>
+<pre><code>pip install -r requirements.txt pyinstaller pillow
+python build.py</code></pre>
+<p><code>build.py</code> runs PyInstaller with the right options for the OS it's on and puts the result in <code>dist/release/</code>:</p>
 <table>
-  <tr><th>Flag</th><th>Why</th></tr>
-  <tr><td><code>--onefile</code></td><td>One portable exe instead of a folder.</td></tr>
-  <tr><td><code>--noconsole</code></td><td>No black console window behind the app.</td></tr>
-  <tr><td><code>--uac-admin</code></td><td>Asks for admin rights on launch, so users don't have to right-click.</td></tr>
-  <tr><td><code>--icon favicon.ico</code></td><td>Icon for the exe file in Explorer.</td></tr>
-  <tr><td><code>--add-data "favicon.ico;."</code></td><td>Bundles the icon so the window's title bar can use it too.</td></tr>
+  <tr><th>OS</th><th>File</th><th>What it is</th></tr>
+  <tr><td>Windows</td><td><code>PI-Backuper-&lt;version&gt;-windows-x64.exe</code></td><td>One portable exe, no console window, asks for admin rights on launch.</td></tr>
+  <tr><td>macOS</td><td><code>PI-Backuper-&lt;version&gt;-macos-arm64.zip</code></td><td>A zipped <code>PI-Backuper.app</code> (<code>-x64</code> when built on an Intel Mac).</td></tr>
+  <tr><td>Linux</td><td><code>PI-Backuper-&lt;version&gt;-linux-x64.tar.gz</code></td><td>One executable (<code>-arm64</code> when built on a Pi or other ARM machine).</td></tr>
 </table>
-<p>The <code>^</code> characters are line continuations for <code>cmd.exe</code>. In PowerShell use a backtick <code>`</code> instead, or put it all on one line.</p>
+<p>A Linux build only runs on systems with a glibc at least as new as the one it was built on, so build on the oldest distro you want to support. The official builds use Ubuntu 22.04.</p>
+
+<h2 id="releases">Releases</h2>
+<p>Releases are built by GitHub Actions. Bump <code>__version__</code> in <code>pi_backuper/__init__.py</code> (and <code>version</code> in <code>pyproject.toml</code>), commit, then push a matching tag:</p>
+<pre><code>git tag v1.2.0
+git push origin v1.2.0</code></pre>
+<p>The <code>release</code> workflow checks the tag matches <code>__version__</code>, builds Windows x64, macOS arm64 and x64, and Linux x64 and arm64, and publishes them as a GitHub release with a <code>SHA256SUMS.txt</code>. The same builds also run on every pull request (workflow <code>build</code>), so a broken build shows up before you tag, and you can start one by hand from the Actions tab.</p>
 
 <h2 id="tests">Tests</h2>
-<p>The imaging code doesn't depend on Windows, so the tests run anywhere, including Linux and macOS:</p>
+<p>The tests run on any OS:</p>
 <pre><code>pip install pytest
 python -m pytest</code></pre>
-<p>They run backup, restore and clone against fake in-memory disks. Among other things they check:</p>
+<p>They run backup, restore and clone against fake in-memory disks, and the Linux and macOS disk listing against fake <code>/sys</code> trees and <code>diskutil</code> output. Among other things they check:</p>
 <ul>
   <li>backup then restore gives back identical data, compressed and uncompressed</li>
   <li>a gzip image that doesn't end on a sector boundary leaves the rest of that sector alone</li>
@@ -88,20 +87,27 @@ python -m pytest</code></pre>
   <li>a cancelled or failed backup leaves no files behind</li>
   <li>a write error stops the reader thread too</li>
   <li>a new backup replaces an old hash file</li>
+  <li>on Linux, only USB and SD disks are listed, and never the one the system runs from</li>
+  <li>a card swapped after Refresh is noticed</li>
 </ul>
-<p>GitHub Actions runs the tests on Ubuntu and Windows for every push and pull request. On Windows it also checks that the Windows-only modules import cleanly.</p>
+<p>GitHub Actions runs the tests on Linux, Windows and macOS for every push and pull request, and checks the app imports with each OS's disk code.</p>
 
 <h2 id="project-layout">Project layout</h2>
 <pre><code>main.py                  entry point (what PyInstaller builds)
+build.py                 builds and packs the app for the current OS
 pi_backuper/__init__.py  name, version, author, licence
 pi_backuper/__main__.py  lets you run "python -m pi_backuper"
-pi_backuper/imaging.py   backup / restore / clone / verify, no Windows code
-pi_backuper/windisk.py   finding disks, raw access, volume locking (Windows only)
+pi_backuper/imaging.py   backup / restore / clone / verify, no OS-specific code
+pi_backuper/disks/       finding disks, raw access, locking/unmounting
+  windows.py             WMI, \\.\PhysicalDriveN, volume locks
+  macos.py               diskutil, /dev/rdiskN
+  linux.py               /sys and /proc, /dev/sdX and /dev/mmcblkN
 pi_backuper/gui.py       Tkinter window
 pi_backuper/fmt.py       "29.7 GB" and "3m 05s left" formatting
-tests/                   tests for imaging.py using fake in-memory disks
-favicon.ico              app icon
-requirements.txt         pywin32, WMI
+tests/                   tests using fake disks, /sys trees and diskutil output
+favicon.ico, icon.png    app icon (Windows wants .ico, Tk elsewhere takes .png)
+requirements.txt         pywin32, WMI (Windows only)
+.github/workflows/       tests, builds, releases
 pyproject.toml           package metadata</code></pre>
 <p>See <a href="how-it-works.html">How it works</a> for what's inside each module.</p>
 

@@ -1,0 +1,55 @@
+name: release
+
+# Push a tag like v1.2.0 and this builds Windows, macOS and Linux versions
+# and publishes them as a GitHub release. The tag has to match __version__
+# in pi_backuper/__init__.py, so a release can't go out with the wrong number.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches __version__
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' pi_backuper/__init__.py)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match __version__ $version in pi_backuper/__init__.py"
+            exit 1
+          fi
+
+  build:
+    needs: check-version
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: release
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            # Re-running the workflow: replace the files, keep the notes.
+            gh release upload "$tag" release/* --clobber
+          else
+            gh release create "$tag" release/* --title "PI-Backuper ${tag#v}" --generate-notes
+          fi

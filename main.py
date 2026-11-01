@@ -1,9 +1,4 @@
-"""Entry point. Build the exe from this file (see README)."""
-
-import sys
-
-if sys.platform != "win32":
-    sys.exit("PI-Backuper only runs on Windows.")
+"""Entry point. build.py turns this file into the app (see README)."""
 
 from pi_backuper.gui import main
 

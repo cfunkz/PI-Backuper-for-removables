@@ -42,9 +42,10 @@
 <p>The code is split into three layers that only talk downwards:</p>
 <pre><code>gui.py      the window; runs jobs on a worker thread
   │
-  ├── windisk.py   Windows: list disks, open them raw, lock volumes
+  ├── disks/       list disks, open them raw, lock or unmount volumes
+  │     windows.py, macos.py, linux.py (one is picked at startup)
   └── imaging.py   backup / restore / clone / verify, pure Python</code></pre>
-<p><code>imaging.py</code> never imports anything Windows-specific. It works on any object that looks like a disk, which is why the tests can run on Linux with fake disks in memory.</p>
+<p><code>imaging.py</code> never imports anything OS-specific. It works on any object that looks like a disk, which is why the tests can run on Linux with fake disks in memory.</p>
 
 <h2 id="imaging-py">imaging.py</h2>
 <h3 id="the-device-interface">The device interface</h3>
@@ -83,19 +84,26 @@
 <h3 id="hash-file-helpers">Hash file helpers</h3>
 <p><code>read_sidecar()</code> returns <code>(algo, size, digest)</code> or <code>None</code> if the file is missing or unreadable. <code>write_sidecar()</code> writes through a temp file and a rename. <code>image_size()</code> gives the uncompressed size: the file size for plain images, the hash file's size for gzip ones, or <code>None</code> if it can't know.</p>
 
-<h2 id="windisk-py">windisk.py</h2>
+<h2 id="disks">disks/</h2>
+<p>Every OS gets its own module with the same functions, and <code>disks/__init__.py</code> picks the right one when the app starts. The GUI only ever talks to that shared interface.</p>
 <table>
   <tr><th>Name</th><th>What it does</th></tr>
-  <tr><td><code>list_disks()</code></td><td>Uses WMI to find USB and removable disks, skipping empty readers and the system disk. Returns <code>Disk</code> records.</td></tr>
-  <tr><td><code>Disk</code></td><td>Number, size, model, serial, PnP hardware ID and drive letters. <code>label</code> is the text shown in the dropdowns.</td></tr>
-  <tr><td><code>recheck(disk)</code></td><td>Lists disks again and returns the fresh entry only if number, hardware ID, serial and size all still match. Otherwise raises.</td></tr>
-  <tr><td><code>WinDisk(number, writable)</code></td><td>Opens <code>\\.\PhysicalDriveN</code>. Reads the real size with <code>IOCTL_DISK_GET_LENGTH_INFO</code> (WMI rounds it down) and the sector size from the drive geometry. On close after writing, asks Windows to re-read the partition table.</td></tr>
-  <tr><td><code>VolumeLocks(letters, dismount, required)</code></td><td>Locks, and optionally dismounts, each volume. Retries for about three seconds. With <code>required=True</code> a failed lock is an error; otherwise the letter goes in <code>.failed</code>.</td></tr>
-  <tr><td><code>disk_number_of(path)</code></td><td>Which physical disk a path is on. Used to stop you saving onto the card you're reading.</td></tr>
-  <tr><td><code>keep_awake()</code></td><td>Context manager that stops Windows sleeping.</td></tr>
-  <tr><td><code>explain(e)</code></td><td>Turns a Windows error into a plain-English <code>OSError</code>.</td></tr>
-  <tr><td><code>is_admin()</code></td><td>Whether the process has admin rights.</td></tr>
+  <tr><td><code>list_disks()</code></td><td>USB and removable disks with media in them, never the system disk. Returns <code>Disk</code> records.</td></tr>
+  <tr><td><code>Disk</code></td><td>OS id (disk number, <code>sdb</code>, <code>disk4</code>), raw device path, size, model, serial, hardware ID and mount points. <code>label</code> is the text shown in the dropdowns.</td></tr>
+  <tr><td><code>recheck(disk)</code></td><td>Lists disks again and returns the fresh entry only if id, hardware ID, serial and size all still match. Otherwise raises.</td></tr>
+  <tr><td><code>claim_source(disk)</code></td><td>Context manager around a read. Windows locks the volumes, macOS unmounts and remounts afterwards, Linux leaves them alone. Yields anything it couldn't lock so the user can be warned.</td></tr>
+  <tr><td><code>claim_target(disk)</code></td><td>Context manager around a write. Locks and dismounts (Windows) or unmounts (macOS, Linux) every volume, or raises.</td></tr>
+  <tr><td><code>open_disk(disk, writable)</code></td><td>Opens the raw device. See below.</td></tr>
+  <tr><td><code>disks_holding(path)</code></td><td>Which physical disks a path is on. Used to stop you saving onto the card you're reading.</td></tr>
+  <tr><td><code>keep_awake()</code></td><td>Stops the machine sleeping mid-job (<code>SetThreadExecutionState</code>, <code>caffeinate</code>, <code>systemd-inhibit</code>).</td></tr>
+  <tr><td><code>is_admin()</code>, <code>relaunch_as_admin()</code></td><td>Checks for admin/root, and restarts the app through UAC, the macOS password dialog or <code>pkexec</code>.</td></tr>
 </table>
+<h3 id="per-os">Per OS</h3>
+<ul>
+  <li><strong>Windows</strong> finds disks through WMI and opens <code>\\.\PhysicalDriveN</code>. The real size comes from <code>IOCTL_DISK_GET_LENGTH_INFO</code> (WMI rounds it down). After writing it asks Windows to re-read the partition table.</li>
+  <li><strong>macOS</strong> asks <code>diskutil</code> for external and removable disks and opens <code>/dev/rdiskN</code>, the uncached raw node, which is several times faster than <code>/dev/diskN</code>. APFS volumes are traced back through their container to the physical disk.</li>
+  <li><strong>Linux</strong> reads <code>/sys/block</code> and <code>/proc/self/mountinfo</code> directly, so it needs no extra tools. It follows partitions, LVM and LUKS down to the physical disk to find the one the system runs from. Targets are opened with <code>O_EXCL</code>, which fails if anything is mounted and stops anything mounting while the job runs, and <code>O_DSYNC</code>, so the progress bar shows what really reached the card. Before verifying, the kernel's cached copy is dropped so the check reads the card itself.</li>
+</ul>
 
 <h2 id="gui-py">gui.py</h2>
 <p>A single Tkinter window. When you start a job it does all the checks on the main thread (so it can show dialogs), then runs the work on a background thread inside <code>keep_awake()</code>, the volume locks and the open disks, in that order.</p>

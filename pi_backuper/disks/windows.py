@@ -3,16 +3,16 @@
 import ctypes
 import os
 import struct
+import subprocess
 import time
 from contextlib import contextmanager
-from dataclasses import dataclass
 
 import pywintypes
 import win32con
 import win32file
 import wmi
 
-from .fmt import fmt_bytes
+from .common import Disk
 
 IOCTL_DISK_GET_DRIVE_GEOMETRY = 0x00070000
 IOCTL_DISK_GET_LENGTH_INFO = 0x0007405C
@@ -61,8 +61,13 @@ def keep_awake():
         kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 
-def disk_number_of(path):
-    """Physical disk number that holds `path`, or None (network share, spanned volume...)."""
+def disks_holding(path):
+    """{disk number} of the physical disk `path` is on; empty for network shares etc."""
+    n = _disk_number_of(path)
+    return set() if n is None else {n}
+
+
+def _disk_number_of(path):
     drive = os.path.splitdrive(os.path.abspath(path))[0]
     if len(drive) != 2 or drive[1] != ":":
         return None
@@ -82,26 +87,10 @@ def disk_number_of(path):
 
 # ---------- listing ----------
 
-@dataclass(frozen=True)
-class Disk:
-    number: int
-    size: int
-    model: str
-    serial: str
-    pnp_id: str
-    letters: tuple
-
-    @property
-    def label(self):
-        letters = " ".join(self.letters) or "no letter"
-        serial = f" #{self.serial}" if self.serial else ""
-        return f"Disk {self.number}: {self.model}{serial}  |  {fmt_bytes(self.size)}  |  {letters}"
-
-
 def list_disks():
     """Removable / USB disks, never the one Windows runs from."""
     system_drive = os.environ.get("SystemDrive", "C:").upper()
-    system_disk = disk_number_of(system_drive + "\\")
+    system_disk = _disk_number_of(system_drive + "\\")
 
     disks = []
     for d in wmi.WMI().Win32_DiskDrive():
@@ -117,14 +106,16 @@ def list_disks():
         if number == system_disk or system_drive in letters:
             continue
         disks.append(Disk(
-            number=number,
+            id=number,
+            name=f"Disk {number}",
+            path=rf"\\.\PhysicalDrive{number}",
             size=int(d.Size),
             model=(d.Model or "USB disk").strip(),
             serial=(d.SerialNumber or "").strip(),
-            pnp_id=(d.PNPDeviceID or "").strip(),
-            letters=tuple(sorted(letters)),
+            hw_id=(d.PNPDeviceID or "").strip(),
+            mounts=tuple(sorted(letters)),
         ))
-    disks.sort(key=lambda x: x.number)
+    disks.sort(key=lambda x: x.id)
     return disks
 
 
@@ -140,28 +131,13 @@ def _letters(drive):
     return letters
 
 
-def recheck(disk):
-    """Make sure `disk` is still the same physical device it was when listed.
-
-    Disk numbers get reused when cards are swapped, so a stale number could
-    point at a different card. Returns the fresh entry (letters may change).
-    """
-    for d in list_disks():
-        if d.number == disk.number:
-            if d.pnp_id == disk.pnp_id and d.serial == disk.serial and d.size == disk.size:
-                return d
-            break
-    raise RuntimeError(f"Disk {disk.number} changed or was unplugged since the list "
-                       "was refreshed. Press Refresh and pick it again.")
-
-
 # ---------- raw access ----------
 
 class WinDisk:
     """\\\\.\\PhysicalDriveN opened for raw, sector-aligned I/O."""
 
-    def __init__(self, number, writable=False):
-        self.path = rf"\\.\PhysicalDrive{number}"
+    def __init__(self, path, writable=False):
+        self.path = path
         self.writable = writable
         access = win32con.GENERIC_READ | (win32con.GENERIC_WRITE if writable else 0)
         try:
@@ -287,3 +263,27 @@ class VolumeLocks:
             except Exception:
                 pass
         self._handles = []
+
+
+def open_disk(disk, writable=False):
+    return WinDisk(disk.path, writable)
+
+
+@contextmanager
+def claim_source(disk):
+    """Best-effort lock so nothing writes to the source mid-backup.
+    Yields the letters that couldn't be locked."""
+    with VolumeLocks(disk.mounts, dismount=False, required=False) as locks:
+        yield locks.failed
+
+
+def claim_target(disk):
+    return VolumeLocks(disk.mounts, dismount=True, required=True)
+
+
+def relaunch_as_admin(argv):
+    """Start the app again through the UAC prompt. Doesn't wait for it."""
+    params = subprocess.list2cmdline(argv[1:])
+    result = ctypes.windll.shell32.ShellExecuteW(None, "runas", argv[0], params, None, 1)
+    if result <= 32:
+        raise RuntimeError("Didn't get administrator rights, so PI-Backuper can't open disks.")

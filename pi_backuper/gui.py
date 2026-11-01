@@ -11,10 +11,11 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
 from . import __author__, __description__, __license__, __title__, __url__, __version__
-from . import imaging, windisk
+from . import disks, imaging
 from .fmt import fmt_bytes, fmt_eta
 
-ICON_FILE = "favicon.ico"
+ICON_FILE = "favicon.ico"  # Windows wants .ico for the title bar
+ICON_PNG = "icon.png"      # everyone else takes a PNG
 IMAGE_TYPES = [("Disk image", "*.img *.img.gz"), ("All files", "*.*")]
 SPEED_WINDOW = 4.0  # seconds of history used for speed and ETA
 BUTTON_WIDTH = 13   # in characters; keeps the main buttons lined up
@@ -167,7 +168,7 @@ class App(ttk.Frame):
 
     def refresh(self):
         try:
-            self.disks = windisk.list_disks()
+            self.disks = disks.list_disks()
         except Exception as e:
             self.disks = []
             self.status.set(f"Couldn't list disks: {e}")
@@ -192,7 +193,7 @@ class App(ttk.Frame):
         if i < 0 or i >= len(self.disks):
             raise UserError("Pick a device first.")
         # Re-read the hardware list now: the card may have been swapped since Refresh.
-        return windisk.recheck(self.disks[i])
+        return disks.recheck(self.disks[i])
 
     # ---------- file pickers ----------
 
@@ -250,7 +251,7 @@ class App(ttk.Frame):
             if not messagebox.askyesno(__title__, f"{out}\n\nalready exists. Replace it?"):
                 return
         disk = self._selected(self.disk_box)
-        if windisk.disk_number_of(out) == disk.number:
+        if disk.id in disks.disks_holding(folder):
             raise UserError("You can't save the image onto the device you're backing up.")
 
         free = shutil.disk_usage(folder).free
@@ -265,12 +266,12 @@ class App(ttk.Frame):
                 return
 
         def work(job):
-            with windisk.keep_awake(), \
-                    windisk.VolumeLocks(disk.letters, dismount=False, required=False) as locks, \
-                    windisk.WinDisk(disk.number) as dev:
-                if locks.failed:
-                    self.events.put(("note", f"Couldn't lock {' '.join(locks.failed)}. "
-                                             "Don't use it until the backup finishes."))
+            with disks.keep_awake(), \
+                    disks.claim_source(disk) as in_use, \
+                    disks.open_disk(disk) as dev:
+                if in_use:
+                    self.events.put(("note", f"{' '.join(in_use)} couldn't be locked. "
+                                             "Don't change anything on it until the backup finishes."))
                 imaging.backup(dev, out, job, compress=compress, verify=verify)
             return f"Backup complete{' and verified' if verify else ''}: {out}"
 
@@ -282,7 +283,7 @@ class App(ttk.Frame):
             raise UserError("Choose an image file to restore.")
         img = os.path.abspath(img)
         disk = self._selected(self.disk_box)
-        if windisk.disk_number_of(img) == disk.number:
+        if disk.id in disks.disks_holding(img):
             raise UserError("The image is stored on the device you're restoring to.")
 
         note = "" if imaging.read_sidecar(img) else \
@@ -291,13 +292,13 @@ class App(ttk.Frame):
                                    f"{disk.label}\n\nRestore {os.path.basename(img)} to it?{note}",
                                    icon="warning", default="no"):
             return
-        disk = windisk.recheck(disk)
+        disk = disks.recheck(disk)
         verify = self.verify.get()
 
         def work(job):
-            with windisk.keep_awake(), \
-                    windisk.VolumeLocks(disk.letters, dismount=True, required=True), \
-                    windisk.WinDisk(disk.number, writable=True) as dev:
+            with disks.keep_awake(), \
+                    disks.claim_target(disk), \
+                    disks.open_disk(disk, writable=True) as dev:
                 imaging.restore(img, dev, job, verify=verify)
             return f"Restore complete{' and verified' if verify else ''}. Safe to remove the device."
 
@@ -306,24 +307,24 @@ class App(ttk.Frame):
     def _start_clone(self):
         a = self._selected(self.src_box)
         b = self._selected(self.dst_box)
-        if a.number == b.number:
+        if a.id == b.id:
             raise UserError("A and B must be different devices.")
         if not messagebox.askyesno("Erase device?", f"EVERYTHING on B will be erased:\n\n"
                                    f"A (copy from): {a.label}\nB (erase):     {b.label}\n\nContinue?",
                                    icon="warning", default="no"):
             return
-        a, b = windisk.recheck(a), windisk.recheck(b)
+        a, b = disks.recheck(a), disks.recheck(b)
         verify = self.verify.get()
 
         def work(job):
-            with windisk.keep_awake(), \
-                    windisk.VolumeLocks(a.letters, dismount=False, required=False) as locks, \
-                    windisk.VolumeLocks(b.letters, dismount=True, required=True), \
-                    windisk.WinDisk(a.number) as src, \
-                    windisk.WinDisk(b.number, writable=True) as dst:
-                if locks.failed:
-                    self.events.put(("note", f"Couldn't lock {' '.join(locks.failed)} on A. "
-                                             "Don't use it until the clone finishes."))
+            with disks.keep_awake(), \
+                    disks.claim_source(a) as in_use, \
+                    disks.claim_target(b), \
+                    disks.open_disk(a) as src, \
+                    disks.open_disk(b, writable=True) as dst:
+                if in_use:
+                    self.events.put(("note", f"{' '.join(in_use)} on A couldn't be locked. "
+                                             "Don't change anything on it until the clone finishes."))
                 imaging.clone(src, dst, job, verify=verify)
             return f"Clone complete{' and verified' if verify else ''}. Safe to remove both devices."
 
@@ -427,14 +428,16 @@ class UserError(Exception):
 
 def _setup_style(root):
     style = ttk.Style(root)
-    for theme in ("vista", "clam"):  # native look on Windows, tidy fallback elsewhere
+    # Native look on Windows and macOS, tidy fallback on Linux.
+    for theme in ("vista", "aqua", "clam"):
         if theme in style.theme_names():
             style.theme_use(theme)
             break
-    for name in ("TkDefaultFont", "TkTextFont"):
-        tkfont.nametofont(name).configure(size=10)
+    if sys.platform != "darwin":  # macOS picks a sensible size itself; 10 would look tiny there
+        for name in ("TkDefaultFont", "TkTextFont"):
+            tkfont.nametofont(name).configure(size=10)
     base = tkfont.nametofont("TkDefaultFont").actual()
-    style.configure("Title.TLabel", font=(base["family"], 11, "bold"))
+    style.configure("Title.TLabel", font=(base["family"], abs(base["size"]) + 1, "bold"))
     style.configure("Hint.TLabel", foreground="#6e6e6e")
 
 
@@ -447,14 +450,26 @@ def _dpi_aware():
         pass
 
 
+def _set_icon(root):
+    try:
+        if sys.platform == "win32":
+            root.iconbitmap(resource_path(ICON_FILE))
+        else:
+            root.iconphoto(True, tk.PhotoImage(file=resource_path(ICON_PNG)))
+    except Exception:
+        pass  # no icon is better than no app
+
+
 def main():
+    if "--version" in sys.argv[1:]:
+        # Used by the release build to check the packaged app starts at all.
+        if sys.stdout:
+            print(f"{__title__} {__version__}")
+        return
     _dpi_aware()
     root = tk.Tk()
     root.title(f"{__title__} v{__version__}")
-    try:
-        root.iconbitmap(resource_path(ICON_FILE))
-    except Exception:
-        pass
+    _set_icon(root)
 
     def report(exc, value, tb):
         import traceback
@@ -462,10 +477,15 @@ def main():
 
     root.report_callback_exception = report
 
-    if not windisk.is_admin():
+    if not disks.is_admin():
         root.withdraw()  # just the message box, no empty window behind it
-        messagebox.showerror(__title__, "Please run PI-Backuper as Administrator.\n"
-                                        "Raw disk access needs it.")
+        who = "Administrator" if sys.platform == "win32" else "root"
+        if messagebox.askyesno(__title__, f"Raw disk access needs {who} rights.\n\n"
+                                          f"Restart PI-Backuper as {who}?"):
+            try:
+                disks.relaunch_as_admin()
+            except RuntimeError as e:
+                messagebox.showerror(__title__, str(e))
         root.destroy()
         return
 
