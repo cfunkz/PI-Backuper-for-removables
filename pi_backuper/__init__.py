@@ -1,5 +1,5 @@
 __title__ = "PI-Backuper"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "cFunkz"
 __license__ = "MIT"
 __url__ = "https://github.com/cfunkz/PI-Backuper"
