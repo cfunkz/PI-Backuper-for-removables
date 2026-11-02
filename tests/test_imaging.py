@@ -195,3 +195,43 @@ def test_new_backup_replaces_old_sidecar(tmp_path):
     second = imaging.backup(FakeDisk(CHUNK), out, Job(), compress=False)
     assert first != second
     assert imaging.read_sidecar(out)[2] == second
+
+
+def test_truncated_gzip_is_reported_and_disk_left_blank(tmp_path):
+    img = tmp_path / "cut.img.gz"
+    whole = gzip.compress(os.urandom(CHUNK * 3))
+    img.write_bytes(whole[:-1000])  # download that stopped early
+
+    dst = FakeDisk(CHUNK * 4)
+    with pytest.raises(VerifyError, match="damaged or incomplete"):
+        imaging.restore(str(img), dst, Job())
+    assert dst.buf[:CHUNK] == bytes(CHUNK)
+    assert no_reader_threads()
+
+
+@pytest.mark.parametrize("line", [
+    "shake_128 100 abcd",            # would pass hashlib.new() but has no plain hexdigest
+    "sha256 100 nothex",
+    "sha256 100 " + "0" * 10,        # wrong length for sha256
+    "sha256 -5 " + "0" * 64,
+    "",
+])
+def test_bad_sidecars_are_ignored(tmp_path, line):
+    img = tmp_path / "x.img"
+    img.write_bytes(b"\0" * 512)
+    (tmp_path / "x.img.hash.txt").write_text(line + "\n")
+    assert imaging.read_sidecar(str(img)) is None
+
+
+def test_full_fat32_drive_gets_a_plain_message(tmp_path, monkeypatch):
+    import errno
+
+    def too_big(self, data):
+        raise OSError(errno.EFBIG, "File too large")
+
+    monkeypatch.setattr(imaging.gzip.GzipFile, "write", too_big)
+    out = str(tmp_path / "card.img.gz")
+    with pytest.raises(OSError, match="over 4 GB"):
+        imaging.backup(FakeDisk(SIZE), out, Job())
+    assert not os.path.exists(out + ".partial")
+    assert no_reader_threads()

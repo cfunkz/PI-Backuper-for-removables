@@ -176,7 +176,11 @@ def _holders(name):
     """Device-mapper / RAID devices sitting on the disk or its partitions."""
     found = []
     base = f"{SYS}/block/{name}"
-    for d in [base] + [f"{base}/{p}" for p in os.listdir(base) if p.startswith(name)]:
+    try:
+        parts = [f"{base}/{p}" for p in os.listdir(base) if p.startswith(name)]
+    except OSError:
+        raise RuntimeError(f"{name} was unplugged.") from None
+    for d in [base] + parts:
         try:
             found += os.listdir(f"{d}/holders")
         except OSError:

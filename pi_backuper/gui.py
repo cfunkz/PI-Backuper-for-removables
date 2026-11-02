@@ -247,6 +247,9 @@ class App(ttk.Frame):
         folder = os.path.dirname(out)
         if not os.path.isdir(folder):
             raise UserError(f"Folder doesn't exist:\n{folder}")
+        if os.path.exists(out) and not os.path.isfile(out):
+            # Typing /dev/sdb or a folder here must never end up replacing it.
+            raise UserError(f"{out}\n\nisn't a normal file. Pick a file name to save the image as.")
         if os.path.exists(out) and out != self.picked_backup:
             if not messagebox.askyesno(__title__, f"{out}\n\nalready exists. Replace it?"):
                 return
@@ -343,7 +346,12 @@ class App(ttk.Frame):
             try:
                 self.events.put(("done", work(job)))
             except imaging.Cancelled:
-                self.events.put(("done", cancelled_msg))
+                if failure_note and job.phase == "Verifying":
+                    # Everything was written already; only the read-back check was skipped.
+                    msg = "Check cancelled. The device was fully written but not verified."
+                else:
+                    msg = cancelled_msg
+                self.events.put(("done", msg))
             except Exception as e:
                 msg = str(e) or type(e).__name__
                 self.events.put(("error", f"{msg}\n\n{failure_note}".strip()))
@@ -376,7 +384,8 @@ class App(ttk.Frame):
     def _poll(self):
         try:
             while True:
-                self._handle(self.events.get_nowait())
+                if self._handle(self.events.get_nowait()):
+                    return  # the window is gone, nothing left to poll for
         except queue.Empty:
             pass
         self.after(100, self._poll)
@@ -399,6 +408,7 @@ class App(ttk.Frame):
                     messagebox.showerror(__title__, event[1])
             if self.quit_when_done:
                 self.root.destroy()
+                return True
 
     def _show_progress(self, phase, done, fraction):
         now = time.monotonic()

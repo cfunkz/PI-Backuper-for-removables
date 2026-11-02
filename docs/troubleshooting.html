@@ -48,7 +48,7 @@
   <li>Press <strong>Refresh</strong> after plugging the card in. Some readers take a few seconds to show up.</li>
   <li>Check Disk Management (<code>diskmgmt.msc</code>). If the card isn't there either, it's the reader, the cable or the card.</li>
   <li>Built-in laptop card readers on PCIe sometimes report as fixed disks and are filtered out. Use a USB reader.</li>
-  <li>External drives that Windows reports as neither USB nor removable won't be listed. That's on purpose.</li>
+  <li>Drives Windows reports as USB, removable or external (USB SSDs on UAS show up as external) are listed. Anything else, like an internal SATA or NVMe disk, never is. That's on purpose.</li>
 </ul>
 
 <h3 id="windows-smartscreen-blocks-the-exe">Windows SmartScreen blocks the exe</h3>
@@ -56,6 +56,7 @@
 
 <h2 id="before-a-job-starts">Before a job starts</h2>
 <h3 id="couldnt-lock">"Couldn't lock E:. Close any Explorer windows or programs using it and try again."</h3>
+<p>Every volume on the card gets locked, including ones without a drive letter, so the message can also say "Couldn't lock a volume on Disk N".</p>
 <p>Something has the card open. Close Explorer windows showing the card, any file open from it, and anything like a photo importer or backup tool that grabs new drives. Antivirus scanning a freshly plugged-in drive is another common cause; wait a minute and try again.</p>
 
 <h3 id="disk-n-changed-or-was-unplugged-since-the-list-was-refreshed">"Disk N changed or was unplugged since the list was refreshed"</h3>
@@ -67,6 +68,9 @@
 <h3 id="target-is-smaller-than-source">"Target … is smaller than source"</h3>
 <p>Same thing for clone. B has to be at least as big as A.</p>
 
+<h3 id="isnt-a-normal-file">"… isn't a normal file. Pick a file name to save the image as."</h3>
+<p>The backup path points at a folder or a device (like <code>/dev/sdb</code>) rather than a file. Use <strong>Save as…</strong> and give the image a name.</p>
+
 <h3 id="not-enough-space">"Not enough space"</h3>
 <p>The folder you're saving to doesn't have room for an uncompressed image of the card. Turn on compression, or save somewhere else.</p>
 
@@ -77,6 +81,8 @@
   <tr><td>The device is write-protected</td><td>Slide the little lock switch on the SD card or adapter up (away from the contacts).</td></tr>
   <tr><td>The device isn't ready</td><td>The card or reader went away. Was it unplugged or did the cable wobble?</td></tr>
   <tr><td>Data error (CRC)</td><td>The card has bad sectors. It's dying. Get the data off if you still can and replace it.</td></tr>
+  <tr><td>The drive you're saving to can't hold files over 4 GB</td><td>It's formatted FAT32, which caps files at 4 GB. Save to a drive formatted exFAT, NTFS, APFS or ext4 instead. The half-written file is deleted.</td></tr>
+  <tr><td>The drive you're saving to ran out of space</td><td>The image compressed less than expected. Free up space or save somewhere else. The half-written file is deleted.</td></tr>
   <tr><td>Not enough free space</td><td>The disk you're saving to filled up, usually because the image compressed less than expected.</td></tr>
   <tr><td>The device reported a hardware error</td><td>The card or reader failed. Try a different reader before blaming the card.</td></tr>
   <tr><td>I/O error</td><td>The card or reader is failing, or it was unplugged.</td></tr>
@@ -96,9 +102,15 @@
 <h3 id="the-image-doesn-t-match-its-hash-txt-file-so-it-s-damaged">"The image doesn't match its .hash.txt file, so it's damaged"</h3>
 <p>The image file has changed since the backup was made: a bad download, a failing drive, or a copy that got cut short. The card was left blank. Use another copy of the backup if you have one. If you're sure the image is fine and the hash file is the wrong one (say you renamed files and mixed them up), move the <code>.hash.txt</code> away and the restore will go ahead without that check.</p>
 
+<h3 id="the-image-file-is-damaged-or-incomplete">"The image file is damaged or incomplete"</h3>
+<p>The <code>.img.gz</code> is cut short or corrupt, usually an interrupted download or copy. The gzip check fails before the partition table is written, so the card is left blank. Use another copy of the image.</p>
+
 <h2 id="after-a-job">After a job</h2>
 <h3 id="the-device-is-now-blank-or-only-partly-written">"The device is now blank or only partly written"</h3>
 <p>A restore or clone was cancelled or failed. That's the safety net working. Run it again before putting the card in a Pi.</p>
+
+<h3 id="check-cancelled">"Check cancelled. The device was fully written but not verified."</h3>
+<p>You cancelled during the read-back check, after everything had been written. The card is complete and should work, it just wasn't checked. Run the job again with verify on if you want to be sure.</p>
 
 <h3 id="windows-asks-to-format-the-card">Windows asks to format the card</h3>
 <p>Windows can't read Linux partitions, so it offers to format them. Click <strong>Cancel</strong>.</p>

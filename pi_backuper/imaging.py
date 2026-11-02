@@ -15,16 +15,23 @@ but isn't:
   whole file has been written, flushed and (optionally) read back.
 """
 
+import errno
 import gzip
 import hashlib
 import os
 import queue
 import threading
 import time
+import zlib
 
 CHUNK = 4 * 1024 * 1024  # multiple of every sector size we'll meet (512, 4096)
 QUEUE_DEPTH = 8          # chunks buffered between reader and writer (32 MiB)
 GZIP_MAGIC = b"\x1f\x8b"
+# Only plain digests. A sidecar naming something like shake_128 would pass
+# hashlib.new() and then blow up at the very end of a restore.
+HASHES = ("md5", "sha1", "sha256", "sha512")
+# What a truncated or corrupt .gz throws while it's being read.
+GZIP_ERRORS = (EOFError, gzip.BadGzipFile, zlib.error)
 
 
 class Cancelled(Exception):
@@ -33,6 +40,31 @@ class Cancelled(Exception):
 
 class VerifyError(Exception):
     pass
+
+
+def damaged_image():
+    return VerifyError("The image file is damaged or incomplete (the gzip data is cut "
+                       "short or corrupt).")
+
+
+def output_error(e):
+    """Explain a failed write to the backup file in plain words."""
+    if e.errno == errno.EFBIG or getattr(e, "winerror", None) == 223:
+        return OSError(e.errno, "The drive you're saving to can't hold files over 4 GB "
+                                "(it's probably FAT32). Save to an exFAT, NTFS, APFS or "
+                                "ext4 drive instead.")
+    if e.errno == errno.ENOSPC or getattr(e, "winerror", None) == 112:
+        return OSError(e.errno, "The drive you're saving to ran out of space.")
+    return e
+
+
+def drop_cache(f):
+    """Forget a file's cached pages so the next read really comes from the disk."""
+    if hasattr(os, "posix_fadvise"):
+        try:
+            os.posix_fadvise(f.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
+        except OSError:
+            pass
 
 
 class Job:
@@ -46,6 +78,7 @@ class Job:
         self._cancel = threading.Event()
         self._on_progress = on_progress
         self._last = 0.0
+        self.phase = None  # last phase reported, so a cancel can say how far it got
 
     def cancel(self):
         self._cancel.set()
@@ -59,6 +92,7 @@ class Job:
             raise Cancelled()
 
     def progress(self, phase, done, fraction, force=False):
+        self.phase = phase
         if not self._on_progress:
             return
         now = time.monotonic()
@@ -79,10 +113,13 @@ def sidecar_path(image_path):
 def read_sidecar(image_path):
     try:
         with open(sidecar_path(image_path), encoding="utf-8") as f:
-            algo, nbytes, digest = f.readline().split()
-        hashlib.new(algo)
-        return algo.lower(), int(nbytes), digest.lower()
-    except (OSError, ValueError):
+            algo, nbytes, digest = f.readline(512).split()
+        algo, nbytes, digest = algo.lower(), int(nbytes), digest.lower()
+        if algo not in HASHES or nbytes < 0 or len(digest) != hashlib.new(algo).digest_size * 2:
+            return None
+        int(digest, 16)
+        return algo, nbytes, digest
+    except (OSError, ValueError, UnicodeDecodeError):
         return None
 
 
@@ -239,15 +276,19 @@ def file_digest(path, algo, job, phase="Verifying"):
     total = os.path.getsize(path) or 1
     count = 0
     with open(path, "rb") as raw:
+        drop_cache(raw)
         src = gzip.GzipFile(fileobj=raw, mode="rb") if is_gzip(path) else raw
-        while True:
-            job.check()
-            data = src.read(CHUNK)
-            if not data:
-                break
-            h.update(data)
-            count += len(data)
-            job.progress(phase, count, raw.tell() / total)
+        try:
+            while True:
+                job.check()
+                data = src.read(CHUNK)
+                if not data:
+                    break
+                h.update(data)
+                count += len(data)
+                job.progress(phase, count, raw.tell() / total)
+        except GZIP_ERRORS:
+            raise damaged_image() from None
     job.progress(phase, count, 1.0, force=True)
     return h.hexdigest(), count
 
@@ -276,21 +317,24 @@ def backup(dev, out_path, job, compress=True, verify=True):
     hasher = hashlib.sha256()
 
     try:
-        with open(partial, "wb") as raw:
-            gz = None
-            if compress:
-                # Level 1: SD cards are mostly empty space, which compresses
-                # just as well at level 1, and anything higher is CPU-bound.
-                gz = gzip.GzipFile(filename=os.path.basename(out_path), mode="wb",
-                                   fileobj=raw, compresslevel=1, mtime=0)
-            try:
-                pump(_device_reader(dev, size, 0, hasher), (gz or raw).write, job,
-                     "Reading", lambda done: done / size)
-            finally:
-                if gz:
-                    gz.close()
-            raw.flush()
-            os.fsync(raw.fileno())
+        try:
+            with open(partial, "wb") as raw:
+                gz = None
+                if compress:
+                    # Level 1: SD cards are mostly empty space, which compresses
+                    # just as well at level 1, and anything higher is CPU-bound.
+                    gz = gzip.GzipFile(filename=os.path.basename(out_path), mode="wb",
+                                       fileobj=raw, compresslevel=1, mtime=0)
+                try:
+                    pump(_device_reader(dev, size, 0, hasher), (gz or raw).write, job,
+                         "Reading", lambda done: done / size)
+                finally:
+                    if gz:
+                        gz.close()
+                raw.flush()
+                os.fsync(raw.fileno())
+        except OSError as e:
+            raise output_error(e) from None
 
         digest = hasher.hexdigest()
         if verify:
@@ -315,6 +359,40 @@ def backup(dev, out_path, job, compress=True, verify=True):
         raise
 
 
+def _restore_body(raw, dev, job, hasher, file_size, gz):
+    """Blank the first chunk, then stream the rest of the image in behind it.
+
+    Returns (first chunk, bytes written). The caller writes the first chunk
+    last, once it knows the whole image went down cleanly.
+    """
+    src = gzip.GzipFile(fileobj=raw, mode="rb") if gz else raw
+    first = read_full(src, CHUNK)
+    if not first:
+        raise ValueError("The image file is empty.")
+    if len(first) > dev.size:
+        raise ValueError("The image is bigger than the device.")
+    hasher.update(first)
+
+    job.check()
+    write_any(dev, 0, bytes(len(first)))
+    written = len(first)
+
+    def read_next():
+        data = read_full(src, CHUNK)
+        hasher.update(data)
+        return data
+
+    def write(data):
+        nonlocal written
+        if written + len(data) > dev.size:
+            raise ValueError("The image is bigger than the device.")
+        write_any(dev, written, data)
+        written += len(data)
+
+    pump(read_next, write, job, "Writing", lambda _: raw.tell() / file_size)
+    return first, written
+
+
 def restore(image_path, dev, job, verify=True):
     """Write an image (plain or gzip) to the device, starting at sector 0."""
     meta = read_sidecar(image_path)
@@ -328,32 +406,11 @@ def restore(image_path, dev, job, verify=True):
     hasher = hashlib.new(algo)
 
     with open(image_path, "rb") as raw:
-        src = gzip.GzipFile(fileobj=raw, mode="rb") if is_gzip(image_path) else raw
-
-        first = read_full(src, CHUNK)
-        if not first:
-            raise ValueError("The image file is empty.")
-        if len(first) > dev.size:
-            raise ValueError("The image is bigger than the device.")
-        hasher.update(first)
-
-        job.check()
-        write_any(dev, 0, bytes(len(first)))
-        written = len(first)
-
-        def read_next():
-            data = read_full(src, CHUNK)
-            hasher.update(data)
-            return data
-
-        def write(data):
-            nonlocal written
-            if written + len(data) > dev.size:
-                raise ValueError("The image is bigger than the device.")
-            write_any(dev, written, data)
-            written += len(data)
-
-        pump(read_next, write, job, "Writing", lambda _: raw.tell() / file_size)
+        try:
+            first, written = _restore_body(raw, dev, job, hasher, file_size, is_gzip(image_path))
+        except GZIP_ERRORS:
+            # The gzip check failed before sector 0 was written, so the device is blank.
+            raise damaged_image() from None
 
     digest = hasher.hexdigest()
     if meta and (written != meta[1] or digest != meta[2]):

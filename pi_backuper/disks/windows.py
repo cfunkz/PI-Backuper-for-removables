@@ -18,10 +18,21 @@ IOCTL_DISK_GET_DRIVE_GEOMETRY = 0x00070000
 IOCTL_DISK_GET_LENGTH_INFO = 0x0007405C
 IOCTL_DISK_UPDATE_PROPERTIES = 0x00070140
 IOCTL_STORAGE_GET_DEVICE_NUMBER = 0x002D1080
+IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS = 0x00560000
 FSCTL_LOCK_VOLUME = 0x00090018
 FSCTL_DISMOUNT_VOLUME = 0x00090020
 
 SHARE_RW = win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE
+
+# Our own handle on kernel32, so setting argtypes here can't upset anyone else's.
+_k32 = ctypes.WinDLL("kernel32")
+_k32.FindFirstVolumeW.restype = ctypes.c_void_p
+_k32.FindFirstVolumeW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint]
+_k32.FindNextVolumeW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
+_k32.FindVolumeClose.argtypes = [ctypes.c_void_p]
+_k32.GetVolumeNameForVolumeMountPointW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p,
+                                                    ctypes.c_uint]
+INVALID_HANDLE = ctypes.c_void_p(-1).value
 
 # Windows error codes worth explaining in plain words.
 FRIENDLY_ERRORS = {
@@ -99,7 +110,8 @@ def list_disks():
             continue
         interface = (d.InterfaceType or "").upper()
         media = (d.MediaType or "").lower()
-        if interface != "USB" and "removable" not in media:
+        # USB SSDs on UAS report "SCSI" and "External hard disk media".
+        if interface != "USB" and "removable" not in media and "external" not in media:
             continue
         number = int(d.Index)
         letters = _letters(d)
@@ -202,6 +214,69 @@ class WinDisk:
         self.close()
 
 
+def _volumes_on(number, letters):
+    """[(shown as, path to open)] for every volume on disk `number`.
+
+    Drive letters alone miss volumes that have none (a second partition
+    with its letter removed, say), and Windows blocks raw writes over any
+    mounted volume it hasn't been told to let go of. So walk all volumes and
+    ask each which disk it lives on. Falls back to the letters if that fails.
+    """
+    fallback = [(letter, rf"\\.\{letter}") for letter in letters]
+    try:
+        found = _all_volumes_on(number, letters)
+    except Exception:
+        return fallback
+    # Every lettered volume should have turned up; if not, trust the letters.
+    if not set(letters) <= {shown for shown, _ in found}:
+        return fallback
+    return found
+
+
+def _all_volumes_on(number, letters):
+    shown = {}  # volume GUID name -> drive letter, so each volume is listed once
+    for letter in letters:
+        buf = ctypes.create_unicode_buffer(64)
+        if _k32.GetVolumeNameForVolumeMountPointW(letter + "\\", buf, len(buf)):
+            shown[buf.value] = letter
+
+    buf = ctypes.create_unicode_buffer(64)
+    find = _k32.FindFirstVolumeW(buf, len(buf))
+    if find in (None, INVALID_HANDLE):
+        return []
+    found = []
+    try:
+        while True:
+            name = buf.value  # \\?\Volume{guid}\
+            if number in _volume_disks(name.rstrip("\\")):
+                found.append((shown.get(name, f"a volume on Disk {number}"), name.rstrip("\\")))
+            if not _k32.FindNextVolumeW(find, buf, len(buf)):
+                break
+    finally:
+        _k32.FindVolumeClose(find)
+    return found
+
+
+def _volume_disks(path):
+    """Disk numbers a volume is stored on (more than one for spanned volumes)."""
+    try:
+        h = win32file.CreateFile(path, 0, SHARE_RW, None, win32con.OPEN_EXISTING, 0, None)
+    except pywintypes.error:
+        return set()
+    try:
+        out = bytes(win32file.DeviceIoControl(h, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, None, 1024))
+    except pywintypes.error:
+        return set()  # empty card reader, CD drive with no disc and so on
+    finally:
+        h.Close()
+    if len(out) < 8:
+        return set()
+    count = struct.unpack_from("<I", out, 0)[0]
+    # Header is 8 bytes; each extent is DiskNumber (padded to 8), offset, length.
+    return {struct.unpack_from("<I", out, 8 + 24 * i)[0]
+            for i in range(count) if 8 + 24 * i + 4 <= len(out)}
+
+
 class VolumeLocks:
     """Lock (and optionally dismount) every volume on a disk while we work on it.
 
@@ -211,8 +286,8 @@ class VolumeLocks:
     letters that couldn't be locked end up in `failed`.
     """
 
-    def __init__(self, letters, dismount, required):
-        self.letters = letters
+    def __init__(self, volumes, dismount, required):
+        self.volumes = volumes  # [(shown as, path)]
         self.dismount = dismount
         self.required = required
         self.failed = []
@@ -220,15 +295,15 @@ class VolumeLocks:
 
     def __enter__(self):
         try:
-            for letter in self.letters:
-                h = self._lock(letter)
+            for shown, path in self.volumes:
+                h = self._lock(path)
                 if h:
                     self._handles.append(h)
                 elif self.required:
-                    raise RuntimeError(f"Couldn't lock {letter}. Close any Explorer windows "
+                    raise RuntimeError(f"Couldn't lock {shown}. Close any Explorer windows "
                                        "or programs using it and try again.")
                 else:
-                    self.failed.append(letter)
+                    self.failed.append(shown)
         except BaseException:
             self.release()
             raise
@@ -237,9 +312,9 @@ class VolumeLocks:
     def __exit__(self, *exc):
         self.release()
 
-    def _lock(self, letter):
+    def _lock(self, path):
         try:
-            h = win32file.CreateFile(rf"\\.\{letter}",
+            h = win32file.CreateFile(path,
                                      win32con.GENERIC_READ | win32con.GENERIC_WRITE,
                                      SHARE_RW, None, win32con.OPEN_EXISTING, 0, None)
         except pywintypes.error:
@@ -273,12 +348,12 @@ def open_disk(disk, writable=False):
 def claim_source(disk):
     """Best-effort lock so nothing writes to the source mid-backup.
     Yields the letters that couldn't be locked."""
-    with VolumeLocks(disk.mounts, dismount=False, required=False) as locks:
+    with VolumeLocks(_volumes_on(disk.id, disk.mounts), dismount=False, required=False) as locks:
         yield locks.failed
 
 
 def claim_target(disk):
-    return VolumeLocks(disk.mounts, dismount=True, required=True)
+    return VolumeLocks(_volumes_on(disk.id, disk.mounts), dismount=True, required=True)
 
 
 def relaunch_as_admin(argv):

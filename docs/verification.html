@@ -77,7 +77,7 @@
 
 <h2 id="older-backups">Older backups</h2>
 <p>Older versions used the same one-line format, and some of those files say <code>md5</code> instead of <code>sha256</code>. Those still work. When restoring, the app uses whatever algorithm the file names, both for checking the image and for the read-back.</p>
-<p>A hash file that's missing or can't be read is treated as "no hash file". The restore goes ahead and the confirmation dialog tells you the image can't be checked.</p>
+<p>Only <code>md5</code>, <code>sha1</code>, <code>sha256</code> and <code>sha512</code> are accepted, and the digest has to be the right length for its algorithm. A hash file that's missing, can't be read or doesn't follow that is treated as "no hash file". The restore goes ahead and the confirmation dialog tells you the image can't be checked.</p>
 
 <h2 id="how-a-backup-s-files-are-written">How a backup's files are written</h2>
 <ol>

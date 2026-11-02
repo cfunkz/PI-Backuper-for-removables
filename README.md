@@ -125,19 +125,6 @@ That builds for whatever OS you run it on and leaves the result in `dist/release
 Or run it straight from source: `python main.py` (it asks for admin/root rights when it starts).
 Linux needs Tkinter: `sudo apt install python3-tk` on Debian, Ubuntu and Raspberry Pi OS.
 
-## Releases
-
-One command makes a release. Set `__version__` in `pi_backuper/__init__.py` (and `version` in `pyproject.toml`), commit, push, then:
-
-```
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-GitHub Actions builds Windows x64, macOS (Apple silicon and Intel) and Linux (x64 and arm64) and publishes them as a release with a `SHA256SUMS.txt`.
-A tag that doesn't match `__version__` is refused, and a tag with a dash (`v1.1.0-beta1`) becomes a pre-release.
-"Run workflow" on the Actions tab builds everything without releasing; the files are in the run's artifacts.
-CI builds the same files on every push to main and every pull request, so a broken build shows up before you tag.
 
 ## Project layout
 
