@@ -65,12 +65,6 @@ python build.py</code></pre>
 </table>
 <p>A Linux build only runs on systems with a glibc at least as new as the one it was built on, so build on the oldest distro you want to support. The official builds use Ubuntu 22.04.</p>
 
-<h2 id="releases">Releases</h2>
-<p>Releases are built by GitHub Actions. Set <code>__version__</code> in <code>pi_backuper/__init__.py</code> (and <code>version</code> in <code>pyproject.toml</code>), commit and push, then push a matching tag:</p>
-<pre><code>git tag v1.0.0
-git push origin v1.0.0</code></pre>
-<p>The <code>release</code> workflow checks the tag matches <code>__version__</code>, builds Windows x64, macOS arm64 and x64, and Linux x64 and arm64, and publishes them as a GitHub release with a <code>SHA256SUMS.txt</code>. A tag with a dash, like <code>v1.1.0-beta1</code>, becomes a pre-release. <em>Run workflow</em> on the Actions tab builds everything without releasing. The <code>CI</code> workflow builds the same files on every push to main and every pull request, so a broken build shows up before you tag.</p>
-
 <h2 id="tests">Tests</h2>
 <p>The tests run on any OS:</p>
 <pre><code>pip install pytest
@@ -113,7 +107,7 @@ pyproject.toml           package metadata</code></pre>
 
 </article>
 <div class="pager"><a href="troubleshooting.html">&larr; Troubleshooting</a><a href="how-it-works.html">How it works &rarr;</a></div>
-<footer>PI-Backuper is MIT licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
+<footer>PI-Backuper is GPL-3.0 licensed. Raspberry Pi is a trademark of the Raspberry Pi Foundation; this project isn't affiliated with it.</footer>
 </main>
 </div>
 <script src="site.js"></script>
